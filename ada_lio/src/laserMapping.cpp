@@ -86,7 +86,7 @@ string map_file_path, lid_topic, imu_topic, map_frame;
 double res_mean_last = 0.05, total_residual = 0.0;
 double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
 double gyr_cov = 0.1, acc_cov = 0.1, b_gyr_cov = 0.0001, b_acc_cov = 0.0001;
-double filter_size_surf_smaller = 0, filter_size_map_min = 0, fov_deg = 0;
+double filter_size_map_smaller = 0, filter_size_map_min = 0, fov_deg = 0;
 double cube_len = 0, HALF_FOV_COS = 0, FOV_DEG = 0, total_distance = 0, lidar_end_time = 0, first_lidar_time = 0.0;
 double neighbor_xy_thres = 0.0;
 int    effct_feat_num = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
@@ -802,7 +802,7 @@ int main(int argc, char** argv)
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
-    nh.param<double>("adaptive/filter_size_surf_smaller", filter_size_surf_smaller, 0.2);
+    nh.param<double>("adaptive/filter_size_map_smaller", filter_size_map_smaller, 0.2);
     nh.param<int>("adaptive/num_thr_adaptive_voxelization", num_thr_adaptive_voxelization, 700);
     nh.param<int>("adaptive/num_thr_adaptive_voxelization_neighbor", num_thr_adaptive_voxelization_neighbor, 500);
     nh.param<bool>("adaptive/adaptive_voxelization_en", adaptive_voxelization_en, false);
@@ -816,7 +816,7 @@ int main(int argc, char** argv)
         cout << "\033[32;1mAdaptive voxelization on!" << endl;
         cout << "Criteria of adaptive voxelization: soft - " << num_thr_adaptive_voxelization;
         cout << "/ hard - " << num_thr_adaptive_voxelization_neighbor << endl;
-        cout << "Adaptive voxel size: " << filter_size_surf_smaller << "\033[0m" << endl;
+        cout << "Adaptive voxel size: " << filter_size_map_smaller << "\033[0m" << endl;
     }
 
     /*** variables definition ***/
@@ -832,7 +832,7 @@ int main(int argc, char** argv)
     memset(point_selected_surf, true, sizeof(point_selected_surf));
     memset(res_last, -1000.0f, sizeof(res_last));
     downSizeFilterSurf.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
-    downSizeFilterSurfAdaptive.setLeafSize(filter_size_surf_smaller, filter_size_surf_smaller, filter_size_surf_smaller);
+    downSizeFilterSurfAdaptive.setLeafSize(filter_size_map_smaller, filter_size_map_smaller, filter_size_map_smaller);
     memset(point_selected_surf, true, sizeof(point_selected_surf));
     memset(res_last, -1000.0f, sizeof(res_last));
 
