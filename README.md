@@ -8,12 +8,13 @@
 + Edit parameters in `.yaml` files
 
 ```yaml
+filter_size_map: 0.5 #bigger voxel size
 adaptive:
     adaptive_voxelization_en: true # If true, ADA-FAST-LIO2, or just FAST-LIO2
-    filter_size_surf_smaller: 0.3 # It should be smaller than `filter_size_surf`
+    filter_size_map_smaller: 0.2 # It should be smaller than `filter_size_map`
     neighbor_xy_thres: 5.0 # xy neighbor threshold
-    num_thr_adaptive_voxelization: 750
-    num_thr_adaptive_voxelization_neighbor: 250
+    num_thr_adaptive_voxelization: 700
+    num_thr_adaptive_voxelization_neighbor: 300 # For Velodyne 16, this method is not applicable
 ```
 
 

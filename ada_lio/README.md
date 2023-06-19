@@ -3,8 +3,11 @@
 + Adaptively resizing the voxel resolution for being more robust on challenging environments (e.g., narrow stairs, aisles, etc.)
 + Original [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
 
-### Below is original README from FAST-LIO2
 <br>
+<br>
+<br>
+<br>
+### Below is original README from FAST-LIO2
 <br>
 <br>
 <br>
