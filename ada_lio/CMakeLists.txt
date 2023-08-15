@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ada_lio)
 
-SET(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -pthread")
 
 ADD_COMPILE_OPTIONS(-std=c++14 )
 ADD_COMPILE_OPTIONS(-std=c++14 )
@@ -52,7 +53,6 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   tf
   livox_ros_driver
-  message_generation
   eigen_conversions
 )
 
@@ -70,18 +70,8 @@ include_directories(
   third_party/ikd-Tree
   third_party/IKFoM_toolkit)
 
-add_message_files(
-  FILES
-  Pose6D.msg
-)
-
-generate_messages(
- DEPENDENCIES
- geometry_msgs
-)
-
 catkin_package(
-  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs message_runtime
+  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs
   DEPENDS EIGEN3 PCL
   INCLUDE_DIRS
 )
