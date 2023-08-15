@@ -1,0 +1,12 @@
+taking_off_altitude: 2.0   # [m], how high the drone should take off at first
+
+waypoints: [ 3.0, 0.0, 2.0, #x,y,z, x2,y2,z2, x3,y3,z3, ...
+             3.0, 3.0, 2.0,
+             0.0, 3.0, 2.0,
+             0.0, 0.0, 2.0]
+
+loop_enable: false          # if waypoint should be followed infinitely
+
+dist_tol: 0.3              # [m], within this distance, drone will go to next waypoint
+
+control_loop_hz: 15.0      # [Hz], must be higher than 5.0
