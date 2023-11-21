@@ -1,4 +1,4 @@
-# Adaptive FAST-LIO
+# Ada-LIO (Adaptive Fast-LIO) Technology Transfer version for Argosdyne
 
 + Adaptively resizing the voxel resolution for being more robust on challenging environments (e.g., narrow stairs, aisles, etc.)
 + Original [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
