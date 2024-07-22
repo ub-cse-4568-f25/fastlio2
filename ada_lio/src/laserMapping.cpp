@@ -779,9 +779,14 @@ int main(int argc, char **argv) {
   std::cout << "\033[1;34mIMU topic: " << imu_topic << "\033[0m" << std::endl;
   std::cout << "\033[1;32mextrinT of " << robot_name << ": " << extrinT[0] << " " << extrinT[1] << " " << extrinT[2]
             << "\033[0m" << std::endl;
+  std::string space(robot_name.length() + 13, ' ');
+  std::cout << "\033[1;32mextrinR of " << robot_name << ": " << extrinR[0] << " " << extrinR[1] << " " << extrinR[2] << "\n";
+  std::cout << space << extrinR[3] << " " << extrinR[4] << " " << extrinR[5] << "\n";
+  std::cout << space << extrinR[6] << " " << extrinR[7] << " " << extrinR[8] << "\n\033[0m";
 
   // Flush
   std::string prefix = save_dir + "/" + sequence_name;
+  std::cout << "Save dir: " << prefix << std::endl;
 
   std::ostringstream oss;
   oss << std::fixed << std::setprecision(1) << filter_size_map_min;
