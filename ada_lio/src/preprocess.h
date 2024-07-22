@@ -10,7 +10,7 @@ using namespace std;
 typedef pcl::PointXYZINormal PointType;
 typedef pcl::PointCloud<PointType> PointCloudXYZI;
 
-enum LID_TYPE{AVIA = 1, VELO16, OUST64}; //{1, 2, 3}
+enum LID_TYPE{AVIA = 1, VELO16 = 2, OUST64 = 3}; //{1, 2, 3}
 enum TIME_UNIT{SEC = 0, MS = 1, US = 2, NS = 3};
 enum Feature{Nor, Poss_Plane, Real_Plane, Edge_Jump, Edge_Plane, Wire, ZeroPoint};
 enum Surround{Prev, Next};

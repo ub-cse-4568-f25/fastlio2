@@ -81,6 +81,7 @@ mutex mtx_buffer;
 condition_variable sig_buffer;
 
 string root_dir = ROOT_DIR;
+string sequence_name, save_dir, robot_name;
 string map_file_path, lid_topic, imu_topic, map_frame;
 
 double res_mean_last = 0.05, total_residual = 0.0;
@@ -141,6 +142,8 @@ geometry_msgs::PoseStamped msg_body_pose;
 
 shared_ptr<Preprocess> p_pre(new Preprocess());
 shared_ptr<ImuProcess> p_imu(new ImuProcess());
+
+std::string output_pose_file = "/home/shapelim/fastlio_original_poses.txt";
 
 void SigHandle(int sig)
 {
@@ -592,18 +595,40 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
         odomAftMapped.pose.covariance[i*6 + 5] = P(k, 2);
     }
 
-    static tf::TransformBroadcaster br;
-    tf::Transform                   transform;
-    tf::Quaternion                  q;
-    transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
-                                    odomAftMapped.pose.pose.position.y, \
-                                    odomAftMapped.pose.pose.position.z));
-    q.setW(odomAftMapped.pose.pose.orientation.w);
-    q.setX(odomAftMapped.pose.pose.orientation.x);
-    q.setY(odomAftMapped.pose.pose.orientation.y);
-    q.setZ(odomAftMapped.pose.pose.orientation.z);
-    transform.setRotation( q );
-    br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "camera_init", "body" ) );
+
+
+    /******* Save poses *******/
+    Eigen::Quaterniond lidar_orientation = state_point.offset_R_L_I.inverse() * state_point.rot * state_point.offset_R_L_I;
+    Eigen::Vector3d lidar_position = state_point.offset_R_L_I.inverse() * (state_point.rot * state_point.offset_T_L_I + state_point.pos - state_point.offset_T_L_I);
+
+    std::ofstream pose_file;
+    pose_file.open(output_pose_file, std::ios::app);
+    if (pose_file.is_open())
+    {
+        pose_file << std::fixed << std::setprecision(8)
+                  << lidar_end_time << " "
+                  << lidar_position(0) << " "
+                  << lidar_position(1) << " "
+                  << lidar_position(2) << " "
+                  << lidar_orientation.x() << " "
+                  << lidar_orientation.y() << " "
+                  << lidar_orientation.z() << " "
+                  << lidar_orientation.w() << std::endl;
+        pose_file.close();
+    }
+
+//    static tf::TransformBroadcaster br;
+//    tf::Transform                   transform;
+//    tf::Quaternion                  q;
+//    transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
+//                                    odomAftMapped.pose.pose.position.y, \
+//                                    odomAftMapped.pose.pose.position.z));
+//    q.setW(odomAftMapped.pose.pose.orientation.w);
+//    q.setX(odomAftMapped.pose.pose.orientation.x);
+//    q.setY(odomAftMapped.pose.pose.orientation.y);
+//    q.setZ(odomAftMapped.pose.pose.orientation.z);
+//    transform.setRotation( q );
+//    br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "camera_init", "body" ) );
 }
 
 void publish_path(const ros::Publisher pubPath)
@@ -620,6 +645,7 @@ void publish_path(const ros::Publisher pubPath)
         path.poses.push_back(msg_body_pose);
         pubPath.publish(path);
     }
+
 }
 
 void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data)
@@ -751,6 +777,9 @@ int main(int argc, char** argv)
     nh.param<bool>("publish/scan_bodyframe_pub_en",scan_body_pub_en, true);
     nh.param<int>("max_iteration",NUM_MAX_ITERATIONS,4);
     nh.param<string>("map_file_path",map_file_path,"");
+    nh.param<string>("common/save_dir", save_dir, "");
+    nh.param<string>("common/sequence_name", sequence_name, "");
+    nh.param<string>("common/robot_name", robot_name, "");
     nh.param<string>("common/map_frame", map_frame, "map");
     nh.param<string>("common/lid_topic",lid_topic,"/livox/lidar");
     nh.param<string>("common/imu_topic", imu_topic,"/livox/imu");
@@ -771,7 +800,7 @@ int main(int argc, char** argv)
     nh.param<int>("point_filter_num", p_pre->point_filter_num, 2);
     nh.param<bool>("feature_extract_enable", p_pre->feature_enabled, false);
     nh.param<bool>("runtime_pos_log_enable", runtime_pos_log, 0);
-    nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
+    nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, false);
     nh.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
@@ -785,6 +814,28 @@ int main(int argc, char** argv)
     
     path.header.stamp    = ros::Time::now();
     path.header.frame_id = map_frame;
+
+    std::cout << "\033[1;34mLiDAR topic: " << lid_topic << "\033[0m" << std::endl;
+    std::cout << "\033[1;34mIMU topic: " << imu_topic << "\033[0m" << std::endl;
+  std::cout << "\033[1;32mextrinT of " << robot_name <<  ": " << extrinT[0] << " " << extrinT[1] << " " << extrinT[2] << "\033[0m" << std::endl;
+
+    // Flush
+    std::string prefix = save_dir + "/" + sequence_name;
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1) << filter_size_map_min;
+    std::string voxel_size_str = oss.str();
+    std::replace(voxel_size_str.begin(), voxel_size_str.end(), '.', '_');
+    if (adaptive_voxelization_en) {
+        output_pose_file = prefix + "/FastLIO2_Adaptive_" + voxel_size_str + ".txt";
+    } else {
+        output_pose_file = prefix + "/FastLIO2_" + voxel_size_str + ".txt";
+    }
+
+    std::ofstream pose_file;
+    pose_file.open(output_pose_file);
+    pose_file << "#timestamp x y z qx qy qz qw\n";
+    pose_file.close();
 
     if (adaptive_voxelization_en) {
         cout << "\033[32;1mAdaptive voxelization on!" << endl;

@@ -5,27 +5,28 @@ common:
     map_frame: "map"
     
 preprocess:
-    lidar_type: 3                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
-    scan_line: 128
+    # 2 is better in the Kimera-Multi dataset
+    lidar_type: 2                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+    scan_line: 64
     timestamp_unit: 3                 # 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
     blind: 0.8
 
 mapping:
     acc_cov: 0.1
     gyr_cov: 0.1
-    b_acc_cov: 0.0001
-    b_gyr_cov: 0.0001
+    b_acc_cov: 0.003
+    b_gyr_cov: 0.001
     fov_degree:    360
-    det_range:     50.0
+    det_range:     80.0
     extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic
-    extrinsic_T: [ 0.0, 0.0, 0.0 ]
-    extrinsic_R: [1, 0, 0,
-                  0, 1, 0,
-                  0, 0, 1]
+    extrinsic_T: [ 4.20405650e-02, -7.38194508e-02, -1.59149569e-01 ]
+    extrinsic_R: [-9.4869700000e-04, 9.9999500000e-01, 2.9021900000e-03,
+                -1.8558300000e-04, 2.9020100000e-03, -9.9999600000e-01,
+                -1.0000000000e+00, -9.4923200000e-04, 1.8282900000e-04]
 
-filter_size_map: 0.5 #bigger voxel size
+filter_size_map: 0.3 # bigger voxel size
 adaptive:
-    adaptive_voxelization_en: true # If true, ADA-FAST-LIO2, or just FAST-LIO2
+    adaptive_voxelization_en: false # If true, ADA-FAST-LIO2, or just FAST-LIO2
     filter_size_map_smaller: 0.2 # It should be smaller than `filter_size_map`
     neighbor_xy_thres: 5.0 # xy neighbor threshold
     num_thr_adaptive_voxelization: 700

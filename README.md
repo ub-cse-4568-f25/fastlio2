@@ -1,10 +1,32 @@
-# Ada-LIO (Adaptive Fast-LIO) Technology Transfer version for Argosdyne
+# FAST-LIO2 for Kimera-Multi Dataset 
 
-+ Adaptively resizing the voxel resolution for being more robust on challenging environments (e.g., narrow stairs, aisles, etc.)
 + Original [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
 
 
-## Note - how to use `Adaptive mode`
+## How to build and use
++ Put the code in your workspace/src folder
+```shell
+catkin build -DCMAKE_BUILD_TYPE=Release
+```
++ Then run
+
+```shell
+roslaunch spark_fast_lio mapping_ouster.launch
+roslaunch spark_fast_lio mapping_velodyne.launch
+roslaunch spark_fast_lio mapping_livox.launch
+```
+
+---
+
+## ToDo 
+
+- [ ] Set all the launch files for convenience
+- [ ] Remove adaptive mode part (due to patent issue from KAIST)
+
+---
+
+## Note - how to use `Adaptive mode` (yet will be deprecated soon)
+
 + Edit parameters in `.yaml` files
 
 ```yaml
@@ -17,15 +39,3 @@ adaptive:
     num_thr_adaptive_voxelization_neighbor: 300 # For Velodyne 16, this method is not applicable
 ```
 
-
-## How to build and use
-+ Put the code in your workspace/src folder
-```shell
-catkin build -DCMAKE_BUILD_TYPE=Release
-```
-+ Then run
-```shell
-roslaunch ada_lio mapping_ouster.launch
-roslaunch ada_lio mapping_velodyne.launch
-roslaunch ada_lio mapping_livox.launch
-```

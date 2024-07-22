@@ -3,17 +3,17 @@
 
 	<arg name="rviz" default="true" />
 
-	<rosparam command="load" file="$(find ada_lio)/config/avia.yaml" />
+	<rosparam command="load" file="$(find spark_fast_lio)/config/avia.yaml" />
 
 	<param name="feature_extract_enable" type="bool" value="0"/>
 	<param name="point_filter_num" type="int" value="3"/>
 	<param name="max_iteration" type="int" value="3" />
 	<param name="cube_side_length" type="double" value="1000" />
 	<param name="runtime_pos_log_enable" type="bool" value="0" />
-  <node pkg="ada_lio" type="adalio_mapping" name="laserMapping" output="screen" /> 
+  <node pkg="spark_fast_lio" type="adalio_mapping" name="laserMapping" output="screen" />
 
 	<group if="$(arg rviz)">
-	<node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find ada_lio)/rviz.rviz" />
+	<node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find spark_fast_lio)/rviz.rviz" />
 	</group>
 
 </launch>
