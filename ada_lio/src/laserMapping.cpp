@@ -376,7 +376,9 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
 
 double lidar_mean_scantime = 0.0;
 int    scan_num            = 0;
-bool sync_packages(MeasureGroup &meas) {
+bool sync_packages(MeasureGroup &meas, bool verbose) {
+  if (verbose) std::cout << "\033[1;34m" << lidar_buffer.size() << " vs " << imu_buffer.size() << "\033[0m" << std::endl;
+
   if (lidar_buffer.empty() || imu_buffer.empty()) {
     return false;
   }
@@ -393,6 +395,10 @@ bool sync_packages(MeasureGroup &meas) {
       lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
     } else {
       scan_num++;
+      if (meas.lidar->points.back().curvature < 800 || meas.lidar->points.back().curvature > 1200) {
+        std::cout << "\033[1;33m[Warning] meas.lidar->points.back().curvature (" << meas.lidar->points.back().curvature << ") should be close to 1000\033[0m" << std::endl;
+        std::cout << "\033[1;33m[Warning] Please check the `timestamp_unit` or values of `time` (or `t`) field of the point cloud input from your sensor\033[0m" << std::endl;
+      }
       lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);
       lidar_mean_scantime += (meas.lidar->points.back().curvature / double(1000) - lidar_mean_scantime) / scan_num;
     }
@@ -403,6 +409,13 @@ bool sync_packages(MeasureGroup &meas) {
   }
 
   if (last_timestamp_imu < lidar_end_time) {
+    if (verbose) {
+      std::cout << std::fixed << std::setprecision(9);
+      std::cout << "\033[1;33m " << last_timestamp_imu << " vs " << lidar_end_time;
+      std::cout << ". Timestamp is not matched. Discarded\033[0m" << std::endl;
+      std::cout.unsetf(std::ios::fixed);
+      std::cout.precision(0);
+    }
     return false;
   }
 
@@ -873,7 +886,7 @@ int main(int argc, char **argv) {
   while (status) {
     if (flg_exit) break;
     ros::spinOnce();
-    if (sync_packages(Measures)) {
+    if (sync_packages(Measures, false)) {
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
         p_imu->first_lidar_time = first_lidar_time;
