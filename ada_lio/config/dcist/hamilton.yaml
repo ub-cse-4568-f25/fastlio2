@@ -1,0 +1,62 @@
+common:
+  lid_topic: "/hamilton/lidar_points"
+  imu_topic: "/hamilton/forward/imu"
+  time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+  map_frame: "map"
+
+preprocess:
+                              # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+  lidar_type: 4               # 4 for ouster LiDAR in Kimera-Multi dataset (KMOUST64)
+
+  scan_line: 64
+  scan_rate: 10               # only need to be set for Ouster, unit: Hz,
+  timestamp_unit: 3           # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
+  blind: 0.5
+  blind_for_human_pilot: 2.0  # This parameter is to reject cloud points from human pilots
+
+mapping:
+  acc_cov: 0.1
+  gyr_cov: 0.1
+  b_acc_cov: 0.003
+  b_gyr_cov: 0.001
+  fov_degree: 180
+  det_range: 100.0
+  extrinsic_est_en: false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+
+  # extrinsics OS1-64 w.r.t. D455 IMU
+  extrinsic_T: [ 0.13584215, 0.12070007, 0.17573266 ]
+#  extrinsic_R: [ 7.9124058277e-03, -1.8995366757e-03, 9.9996655362e-01,
+#                -9.9992687023e-01, -9.1861339630e-03, 7.8946350046e-03,
+#                9.1708358224e-03, -9.9995646962e-01, -1.9720829714e-03 ]
+  # ToDo. Update Hamilton's extrinsic_R
+  extrinsic_R: [ 0.0, -1.0, 0.0,
+                 0.0, 0.0, -1.0,
+                 1.0, 0.0, 0.0 ]
+
+
+  # extrinsics OS1-64 w.r.t. Ouster IMU. But in the current Kimera-Multi, there's no IMU from Ouster.
+#  extrinsic_T: [ 0.006, -0.012, 0.029 ]
+#  extrinsic_R: [ -1.0, 0.0, 0.0,
+#                 0.0, -1.0, 0.0,
+#                 0.0, 0.0, 1.0 ]
+
+
+filter_size_map: 0.3
+
+publish:
+  path_en: true
+  scan_publish_en: true        # false: close all the point cloud output
+  dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
+  scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+
+pcd_save:
+  pcd_save_en: true
+  interval: -1                 # how many LiDAR frames saved in each pcd file;
+  # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
+
+feature_extract_enable: false
+runtime_pos_log_enable: false
+point_filter_num: 4
+max_iteration: 4
+cube_side_length: 1000
+

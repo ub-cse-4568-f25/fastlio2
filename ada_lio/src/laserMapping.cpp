@@ -601,18 +601,18 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
     pose_file.close();
   }
 
-//    static tf::TransformBroadcaster br;
-//    tf::Transform                   transform;
-//    tf::Quaternion                  q;
-//    transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
-//                                    odomAftMapped.pose.pose.position.y, \
-//                                    odomAftMapped.pose.pose.position.z));
-//    q.setW(odomAftMapped.pose.pose.orientation.w);
-//    q.setX(odomAftMapped.pose.pose.orientation.x);
-//    q.setY(odomAftMapped.pose.pose.orientation.y);
-//    q.setZ(odomAftMapped.pose.pose.orientation.z);
-//    transform.setRotation( q );
-//    br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "camera_init", "body" ) );
+  static tf::TransformBroadcaster br;
+  tf::Transform                   transform;
+  tf::Quaternion                  q;
+  transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
+                                  odomAftMapped.pose.pose.position.y, \
+                                  odomAftMapped.pose.pose.position.z));
+  q.setW(odomAftMapped.pose.pose.orientation.w);
+  q.setX(odomAftMapped.pose.pose.orientation.x);
+  q.setY(odomAftMapped.pose.pose.orientation.y);
+  q.setZ(odomAftMapped.pose.pose.orientation.z);
+  transform.setRotation(q);
+  br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, robot_name + "/map", robot_name + "/base"));
 }
 
 void publish_path(const ros::Publisher pubPath) {
