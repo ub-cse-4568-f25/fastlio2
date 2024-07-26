@@ -23,10 +23,19 @@ mapping:
   det_range: 100.0
   extrinsic_est_en: false      # true: enable the online estimation of IMU-LiDAR extrinsic,
 
+  # extrinsics OS1-64 w.r.t. D455 IMU
   extrinsic_T: [ 0.01411912, 0.00289348, -0.11216227 ]
   extrinsic_R: [ 1.8777376609e-02, -9.9981627919e-01, 3.7604182222e-03,
                 -4.4237842055e-02, -4.5882048441e-03, -9.9901071957e-01,
                 9.9884501122e-01, 1.8592458123e-02, -4.4315894748e-02 ]
+
+
+  # extrinsics OS1-64 w.r.t. Ouster IMU. But in the current Kimera-Multi, there's no IMU from Ouster.
+#  extrinsic_T: [ 0.006, -0.012, 0.029 ]
+#  extrinsic_R: [ -1.0, 0.0, 0.0,
+#                 0.0, -1.0, 0.0,
+#                 0.0, 0.0, 1.0 ]
+
 
 filter_size_map: 0.3
 
