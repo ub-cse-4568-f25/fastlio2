@@ -389,15 +389,6 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
   std::vector<float>  yaw_last(N_SCANS, 0.0);   // yaw of last scan point
   std::vector<float>  time_last(N_SCANS, 0.0);  // last offset time
   /*****************************************************************/
-  std::cout << pl_orig.points[0].time << std::endl;
-  std::cout << pl_orig.points[1].time << std::endl;
-  std::cout << pl_orig.points[3000].time << std::endl;
-  std::cout << pl_orig.points.back().time << std::endl;
-
-  std::cout << pl_orig.points[0].ring << std::endl;
-  std::cout << pl_orig.points[1].ring << std::endl;
-  std::cout << pl_orig.points[3000].ring << std::endl;
-  std::cout << pl_orig.points.back().ring << std::endl;
   if (pl_orig.points[plsize - 1].time > 0) {
     given_offset_time = true;
   } else {
