@@ -395,8 +395,8 @@ bool sync_packages(MeasureGroup &meas, bool verbose) {
       lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
     } else {
       scan_num++;
-      if (meas.lidar->points.back().curvature < 800 || meas.lidar->points.back().curvature > 1200) {
-        std::cout << "\033[1;33m[Warning] meas.lidar->points.back().curvature (" << meas.lidar->points.back().curvature << ") should be close to 1000\033[0m" << std::endl;
+      if (meas.lidar->points.back().curvature < 80 || meas.lidar->points.back().curvature > 120) {
+        std::cout << "\033[1;33m[Warning] meas.lidar->points.back().curvature (" << meas.lidar->points.back().curvature << ") should be close to 100\033[0m" << std::endl;
         std::cout << "\033[1;33m[Warning] Please check the `timestamp_unit` or values of `time` (or `t`) field of the point cloud input from your sensor\033[0m" << std::endl;
       }
       lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);
