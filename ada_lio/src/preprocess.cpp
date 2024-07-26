@@ -279,11 +279,12 @@ void Preprocess::kmoust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
   pcl::PointCloud<ouster_ros::Point> pl_orig;
   pcl::fromROSMsg(*msg, pl_orig);
 
-  // The unit becomes nanoseconds, i.e. the `t` ranges 0 - 99889152
-  auto time_offset = pl_orig.points[0].t;
+  // Comment by Hyungtae:
+  // Note that the `t` should range 0 - 99889152
+  // and final `curvature` value should be in the range of 0 - 100
+  const uint32_t time_offset = pl_orig.points[0].t;
   for (int i = 0; i < pl_orig.points.size(); i++) {
     pl_orig.points[i].t -= time_offset;
-//    pl_orig.points[i].t *= 10.0;
   }
 
   int plsize = pl_orig.size();
@@ -360,16 +361,11 @@ void Preprocess::kmoust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
       added_pt.normal_x  = 0;
       added_pt.normal_y  = 0;
       added_pt.normal_z  = 0;
-      added_pt.curvature = pl_orig.points[i].t * time_unit_scale; // curvature unit: ms
+      added_pt.curvature = pl_orig.points[i].t * time_unit_scale; // curvature unit: nanoseconds
 
       pl_surf.points.push_back(added_pt);
     }
   }
-
-  std::cout << "curvature: " << pl_surf.points[0].curvature << std::endl;
-  std::cout << "curvature: " << pl_surf.points.back().curvature << std::endl;
-  // pub_func(pl_surf, pub_full, msg->header.stamp);
-  // pub_func(pl_surf, pub_corn, msg->header.stamp);
 }
 
 void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg) {
