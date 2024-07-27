@@ -84,7 +84,7 @@ condition_variable sig_buffer;
 
 string root_dir = ROOT_DIR;
 string sequence_name, save_dir, robot_name;
-string map_file_path, lid_topic, imu_topic, map_frame;
+string map_file_path, lid_topic, imu_topic, map_frame, lidar_frame, base_frame, visualization_frame;
 
 double res_mean_last                = 0.05, total_residual = 0.0;
 double last_timestamp_lidar         = 0, last_timestamp_imu = -1.0;
@@ -216,7 +216,7 @@ void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po) {
   po[2] = p_global(2);
 }
 
-void RGBpointBodyToWorld(PointType const *const pi, PointType *const po) {
+void pclPointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
 
@@ -226,7 +226,7 @@ void RGBpointBodyToWorld(PointType const *const pi, PointType *const po) {
   po->intensity = pi->intensity;
 }
 
-void RGBpointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
+void pclPointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
   V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu(state_point.offset_R_L_I * p_body_lidar + state_point.offset_T_L_I);
 
@@ -234,6 +234,16 @@ void RGBpointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
   po->y         = p_body_imu(1);
   po->z         = p_body_imu(2);
   po->intensity = pi->intensity;
+}
+
+void pclPointIMUToLiDAR(PointType const *const pi, PointType *const po) {
+    V3D p_body_imu(pi->x, pi->y, pi->z);
+    V3D p_body_lidar(state_point.offset_R_L_I.inverse() * (p_body_imu - state_point.offset_T_L_I));
+
+    po->x         = p_body_lidar(0);
+    po->y         = p_body_lidar(1);
+    po->z         = p_body_lidar(2);
+    po->intensity = pi->intensity;
 }
 
 void points_cache_collect() {
@@ -492,8 +502,13 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
                         new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
-      RGBpointBodyToWorld(&laserCloudFullRes->points[i], \
-                                &laserCloudWorld->points[i]);
+      if (visualization_frame == "imu") {
+        pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
+      } else if (visualization_frame == "lidar") {
+        PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
+        pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudTmp->points[i]);
+        pclPointIMUToLiDAR(&laserCloudTmp->points[i], &laserCloudWorld->points[i]);
+      } else { throw invalid_argument("Invalid visualization frame has been given"); }
     }
 
     sensor_msgs::PointCloud2 laserCloudmsg;
@@ -513,7 +528,7 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
                         new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
-      RGBpointBodyToWorld(&feats_undistort->points[i], \
+      pclPointBodyToWorld(&feats_undistort->points[i], \
                                 &laserCloudWorld->points[i]);
     }
     *pcl_wait_save += *laserCloudWorld;
@@ -537,20 +552,28 @@ void publish_frame_body(const ros::Publisher &pubLaserCloudFull_body) {
   PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
 
   for (int i = 0; i < size; i++) {
-    RGBpointBodyLidarToIMU(&feats_undistort->points[i], \
+    pclPointBodyLidarToIMU(&feats_undistort->points[i], \
                             &laserCloudIMUBody->points[i]);
   }
 
   sensor_msgs::PointCloud2 laserCloudmsg;
   pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
   laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
-  laserCloudmsg.header.frame_id = "body";
+  laserCloudmsg.header.frame_id = lidar_frame;
   pubLaserCloudFull_body.publish(laserCloudmsg);
   publish_count -= PUBFRAME_PERIOD;
 }
 
+std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_lidar_frame() {
+  Eigen::Vector3d lidar_position = state_point.offset_R_L_I.inverse()
+      * (state_point.rot * state_point.offset_T_L_I + state_point.pos - state_point.offset_T_L_I);
+  Eigen::Quaterniond lidar_orientation = state_point.offset_R_L_I.inverse() * state_point.rot * state_point.offset_R_L_I;
+
+  return std::make_tuple(lidar_position, lidar_orientation);
+}
+
 template<typename T>
-void set_posestamp(T &out) {
+void set_posestamp_wrt_imu(T &out) {
   out.pose.position.x    = state_point.pos(0);
   out.pose.position.y    = state_point.pos(1);
   out.pose.position.z    = state_point.pos(2);
@@ -561,11 +584,30 @@ void set_posestamp(T &out) {
 
 }
 
+template<typename T>
+void set_posestamp_wrt_lidar(T &out) {
+  const auto &[position, orientation] = transform_pose_wrt_lidar_frame();
+
+  out.pose.position.x    = position(0);
+  out.pose.position.y    = position(1);
+  out.pose.position.z    = position(2);
+  out.pose.orientation.x = orientation.x();
+  out.pose.orientation.y = orientation.y();
+  out.pose.orientation.z = orientation.z();
+  out.pose.orientation.w = orientation.w();
+
+}
+
 void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   odomAftMapped.header.frame_id = map_frame;
-  odomAftMapped.child_frame_id  = "body";
   odomAftMapped.header.stamp    = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
-  set_posestamp(odomAftMapped.pose);
+  if (visualization_frame == "lidar") {
+    set_posestamp_wrt_lidar(odomAftMapped.pose);
+    odomAftMapped.child_frame_id  = lidar_frame;
+  } else if (visualization_frame == "imu") {
+    set_posestamp_wrt_imu(odomAftMapped.pose);
+    odomAftMapped.child_frame_id  = base_frame;
+  } else { throw invalid_argument("Invalid visualization frame has been given"); }
   pubOdomAftMapped.publish(odomAftMapped);
   auto     P                    = kf.get_P();
   for (int i                    = 0; i < 6; i++) {
@@ -577,8 +619,6 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
     odomAftMapped.pose.covariance[i * 6 + 4] = P(k, 1);
     odomAftMapped.pose.covariance[i * 6 + 5] = P(k, 2);
   }
-
-
 
   /******* Save poses *******/
   Eigen::Quaterniond
@@ -601,7 +641,7 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
     pose_file.close();
   }
 
-  static tf::TransformBroadcaster br;
+  static tf::TransformBroadcaster br_base, br_lidar;
   tf::Transform                   transform;
   tf::Quaternion                  q;
   transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
@@ -612,11 +652,20 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   q.setY(odomAftMapped.pose.pose.orientation.y);
   q.setZ(odomAftMapped.pose.pose.orientation.z);
   transform.setRotation(q);
-  br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, robot_name + "/map", robot_name + "/base"));
+  br_base.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, base_frame));
+
+  // Transformation w.r.t. LiDAR frame
+  transform.setOrigin(tf::Vector3(lidar_position(0), lidar_position(1), lidar_position(2)));
+  transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(), lidar_orientation.z(), lidar_orientation.w()));
+  br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, lidar_frame));
 }
 
 void publish_path(const ros::Publisher pubPath) {
-  set_posestamp(msg_body_pose);
+  if (visualization_frame == "lidar") {
+    set_posestamp_wrt_lidar(msg_body_pose);
+  } else if (visualization_frame == "imu") {
+    set_posestamp_wrt_imu(msg_body_pose);
+  } else { throw invalid_argument("Invalid visualization frame has been given"); }
   msg_body_pose.header.stamp    = ros::Time().fromSec(lidar_end_time);
   msg_body_pose.header.frame_id = map_frame;
 
@@ -753,6 +802,9 @@ int main(int argc, char **argv) {
   nh.param<string>("common/sequence_name", sequence_name, "");
   nh.param<string>("common/robot_name", robot_name, "");
   nh.param<string>("common/map_frame", map_frame, "map");
+  nh.param<string>("common/lidar_frame", lidar_frame, "lidar");
+  nh.param<string>("common/base_frame", base_frame, "base");
+  nh.param<string>("common/visualization_frame", visualization_frame, "imu");
   nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
   nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
   nh.param<bool>("common/time_sync_en", time_sync_en, false);
@@ -872,13 +924,13 @@ int main(int argc, char **argv) {
         nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
   ros::Subscriber sub_imu                = nh.subscribe(imu_topic, 200000, imu_cbk);
   ros::Publisher  pubLaserCloudFull      = nh.advertise<sensor_msgs::PointCloud2>
-    ("/cloud_registered", 100000);
+    ("/" + robot_name + "/locus/cloud_registered", 100000);
   ros::Publisher  pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>
-    ("/cloud_registered_body", 100000);
+    ("/" + robot_name + "/locus/cloud_registered_body", 100000);
   ros::Publisher  pubOdomAftMapped       = nh.advertise<nav_msgs::Odometry>
-    ("/Odometry", 100000);
+    ("/" + robot_name + "/locus/odometry", 100000);
   ros::Publisher  pubPath                = nh.advertise<nav_msgs::Path>
-    ("/path", 100000);
+    ("/" + robot_name + "/locus/path", 100000);
 //------------------------------------------------------------------------------------------------------
   signal(SIGINT, SigHandle);
   ros::Rate rate(5000);
