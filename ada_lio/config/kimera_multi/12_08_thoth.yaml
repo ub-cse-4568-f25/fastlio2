@@ -2,7 +2,11 @@ common:
   lid_topic: "/thoth/lidar_points"
   imu_topic: "/thoth/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "map"
+  map_frame: "thoth/map"
+  lidar_frame: "thoth/base"
+  base_frame: "thoth/imu"     # Originally, base frame of FAST-LIO2 is IMU frame
+
+  visualization_frame: "imu"  # "lidar" or "imu" (default: "imu". "lidar" may lead to additional computational cost.)
 
 preprocess:
                               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,

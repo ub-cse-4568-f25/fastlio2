@@ -1,8 +1,12 @@
 common:
   lid_topic: "/acl_jackal/lidar_points"
   imu_topic: "/acl_jackal/forward/imu"
-  time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "map"
+  time_sync_en: false            # ONLY turn on when external time synchronization is really not possible
+  map_frame: "acl_jackal/map"
+  lidar_frame: "acl_jackal/base"
+  base_frame: "acl_jackal/imu"   # Originally, base frame of FAST-LIO2 is IMU frame
+
+  visualization_frame: "imu"  # "lidar" or "imu" (default: "imu". "lidar" may lead to additional computational cost.)
 
 preprocess:
   lidar_type: 2               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,

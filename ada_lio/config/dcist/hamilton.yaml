@@ -3,8 +3,8 @@ common:
   imu_topic: "/hamilton/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
   map_frame: "hamilton/map"
-  lidar_frame: "hamilton/base" # ToDo. Where's the base frame?
-  base_frame: "hamilton/body"  # Hyungtae: IMU frame
+  lidar_frame: "hamilton/base"
+  base_frame: "hamilton/imu"   # Originally, base frame of FAST-LIO2 is IMU frame
 
   visualization_frame: "lidar" # "lidar" or "imu" (default: "imu")
 
