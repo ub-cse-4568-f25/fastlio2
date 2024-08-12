@@ -52,6 +52,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <tf/transform_listener.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Vector3.h>
@@ -84,7 +85,7 @@ condition_variable sig_buffer;
 
 string root_dir = ROOT_DIR;
 string sequence_name, save_dir, robot_name;
-string map_file_path, lid_topic, imu_topic, map_frame, lidar_frame, base_frame, visualization_frame;
+string map_file_path, lid_topic, imu_topic, map_frame, lidar_frame, base_frame, imu_frame, visualization_frame;
 
 double res_mean_last                = 0.05, total_residual = 0.0;
 double last_timestamp_lidar         = 0, last_timestamp_imu = -1.0;
@@ -132,6 +133,9 @@ V3D euler_cur;
 V3D position_last(Zero3d);
 V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
+/*** Only used for integration with the Hydra system ***/
+V3D Lidar_T_wrt_Base(Zero3d);
+M3D Lidar_R_wrt_Base(Eye3d);
 
 /*** EKF inputs and output ***/
 MeasureGroup                                 Measures;
@@ -237,14 +241,28 @@ void pclPointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
 }
 
 void pclPointIMUToLiDAR(PointType const *const pi, PointType *const po) {
-    V3D p_body_imu(pi->x, pi->y, pi->z);
-    V3D p_body_lidar(state_point.offset_R_L_I.inverse() * (p_body_imu - state_point.offset_T_L_I));
+  V3D p_body_imu(pi->x, pi->y, pi->z);
+  V3D p_body_lidar(state_point.offset_R_L_I.inverse() * (p_body_imu - state_point.offset_T_L_I));
 
-    po->x         = p_body_lidar(0);
-    po->y         = p_body_lidar(1);
-    po->z         = p_body_lidar(2);
-    po->intensity = pi->intensity;
+  po->x         = p_body_lidar(0);
+  po->y         = p_body_lidar(1);
+  po->z         = p_body_lidar(2);
+  po->intensity = pi->intensity;
 }
+
+void pclPointIMUToBase(PointType const *const pi, PointType *const po) {
+  static const auto &offset_R_B_I = state_point.offset_R_L_I * Lidar_R_wrt_Base.inverse();
+  static const auto &offset_T_B_I = -1 * offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
+
+  V3D p_body_imu(pi->x, pi->y, pi->z);
+  V3D p_body_base(offset_R_B_I.inverse() * (p_body_imu - offset_T_B_I));
+
+  po->x         = p_body_base(0);
+  po->y         = p_body_base(1);
+  po->z         = p_body_base(2);
+  po->intensity = pi->intensity;
+}
+
 
 void points_cache_collect() {
   PointVector points_history;
@@ -508,6 +526,10 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
         PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
         pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudTmp->points[i]);
         pclPointIMUToLiDAR(&laserCloudTmp->points[i], &laserCloudWorld->points[i]);
+      } else if (visualization_frame == "base") {
+        PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
+        pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudTmp->points[i]);
+        pclPointIMUToBase(&laserCloudTmp->points[i], &laserCloudWorld->points[i]);
       } else { throw invalid_argument("Invalid visualization frame has been given"); }
     }
 
@@ -565,6 +587,7 @@ void publish_frame_body(const ros::Publisher &pubLaserCloudFull_body) {
 }
 
 std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_lidar_frame() {
+  // offset_A_B: transformation matrix of A w.r.t. B
   Eigen::Vector3d lidar_position = state_point.offset_R_L_I.inverse()
       * (state_point.rot * state_point.offset_T_L_I + state_point.pos - state_point.offset_T_L_I);
   Eigen::Quaterniond lidar_orientation = state_point.offset_R_L_I.inverse() * state_point.rot * state_point.offset_R_L_I;
@@ -572,41 +595,58 @@ std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_lidar_frame()
   return std::make_tuple(lidar_position, lidar_orientation);
 }
 
-template<typename T>
-void set_posestamp_wrt_imu(T &out) {
-  out.pose.position.x    = state_point.pos(0);
-  out.pose.position.y    = state_point.pos(1);
-  out.pose.position.z    = state_point.pos(2);
-  out.pose.orientation.x = geoQuat.x;
-  out.pose.orientation.y = geoQuat.y;
-  out.pose.orientation.z = geoQuat.z;
-  out.pose.orientation.w = geoQuat.w;
+std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_base_frame() {
+  // offset_A_B: transformation matrix of A w.r.t. B
+  static const auto &offset_R_B_I = state_point.offset_R_L_I * Lidar_R_wrt_Base.inverse();
+  static const auto &offset_T_B_I = -1 * offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
+  Eigen::Vector3d lidar_position = offset_R_B_I.inverse()
+      * (state_point.rot * offset_T_B_I + state_point.pos - offset_T_B_I);
+  Eigen::Quaterniond lidar_orientation = Eigen::Quaterniond(offset_R_B_I.inverse() * state_point.rot * offset_R_B_I);
 
+  return std::make_tuple(lidar_position, lidar_orientation);
 }
 
 template<typename T>
-void set_posestamp_wrt_lidar(T &out) {
-  const auto &[position, orientation] = transform_pose_wrt_lidar_frame();
-
-  out.pose.position.x    = position(0);
-  out.pose.position.y    = position(1);
-  out.pose.position.z    = position(2);
-  out.pose.orientation.x = orientation.x();
-  out.pose.orientation.y = orientation.y();
-  out.pose.orientation.z = orientation.z();
-  out.pose.orientation.w = orientation.w();
-
+void set_posestamp(T &out, const::string viz_frame="imu") {
+  if (viz_frame == "imu") {
+    out.pose.position.x    = state_point.pos(0);
+    out.pose.position.y    = state_point.pos(1);
+    out.pose.position.z    = state_point.pos(2);
+    out.pose.orientation.x = geoQuat.x;
+    out.pose.orientation.y = geoQuat.y;
+    out.pose.orientation.z = geoQuat.z;
+    out.pose.orientation.w = geoQuat.w;
+  } else if (viz_frame == "lidar") {
+    const auto &[position, orientation] = transform_pose_wrt_lidar_frame();
+    out.pose.position.x    = position(0);
+    out.pose.position.y    = position(1);
+    out.pose.position.z    = position(2);
+    out.pose.orientation.x = orientation.x();
+    out.pose.orientation.y = orientation.y();
+    out.pose.orientation.z = orientation.z();
+    out.pose.orientation.w = orientation.w();
+  } else if (viz_frame == "base") {
+    const auto &[position, orientation] = transform_pose_wrt_base_frame();
+    out.pose.position.x    = position(0);
+    out.pose.position.y    = position(1);
+    out.pose.position.z    = position(2);
+    out.pose.orientation.x = orientation.x();
+    out.pose.orientation.y = orientation.y();
+    out.pose.orientation.z = orientation.z();
+    out.pose.orientation.w = orientation.w();
+  } else { throw invalid_argument("Invalid visualization frame has been given"); }
 }
 
 void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   odomAftMapped.header.frame_id = map_frame;
   odomAftMapped.header.stamp    = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
+  set_posestamp(odomAftMapped.pose, visualization_frame);
   if (visualization_frame == "lidar") {
-    set_posestamp_wrt_lidar(odomAftMapped.pose);
     odomAftMapped.child_frame_id  = lidar_frame;
-  } else if (visualization_frame == "imu") {
-    set_posestamp_wrt_imu(odomAftMapped.pose);
+  } else if (visualization_frame == "base") {
     odomAftMapped.child_frame_id  = base_frame;
+  } else if (visualization_frame == "imu") {
+    odomAftMapped.child_frame_id  = imu_frame;
   } else { throw invalid_argument("Invalid visualization frame has been given"); }
   pubOdomAftMapped.publish(odomAftMapped);
   auto     P                    = kf.get_P();
@@ -621,10 +661,7 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   }
 
   /******* Save poses *******/
-  Eigen::Quaterniond
-                  lidar_orientation = state_point.offset_R_L_I.inverse() * state_point.rot * state_point.offset_R_L_I;
-  Eigen::Vector3d lidar_position    = state_point.offset_R_L_I.inverse()
-    * (state_point.rot * state_point.offset_T_L_I + state_point.pos - state_point.offset_T_L_I);
+  const auto &[lidar_position, lidar_orientation] = transform_pose_wrt_lidar_frame();
 
   std::ofstream pose_file;
   pose_file.open(output_pose_file, std::ios::app);
@@ -641,7 +678,7 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
     pose_file.close();
   }
 
-  static tf::TransformBroadcaster br_base, br_lidar;
+  static tf::TransformBroadcaster br_imu, br_base, br_lidar;
   tf::Transform                   transform;
   tf::Quaternion                  q;
   transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
@@ -652,20 +689,22 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   q.setY(odomAftMapped.pose.pose.orientation.y);
   q.setZ(odomAftMapped.pose.pose.orientation.z);
   transform.setRotation(q);
-  br_base.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, base_frame));
+  br_imu.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, imu_frame));
 
   // Transformation w.r.t. LiDAR frame
   transform.setOrigin(tf::Vector3(lidar_position(0), lidar_position(1), lidar_position(2)));
   transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(), lidar_orientation.z(), lidar_orientation.w()));
   br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, lidar_frame));
+
+  // Transformation w.r.t. base frame
+  const auto &[base_position, base_orientation] = transform_pose_wrt_base_frame();
+  transform.setOrigin(tf::Vector3(base_position(0), base_position(1), base_position(2)));
+  transform.setRotation(tf::Quaternion(base_orientation.x(), base_orientation.y(), base_orientation.z(), base_orientation.w()));
+  br_base.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, base_frame));
 }
 
 void publish_path(const ros::Publisher pubPath) {
-  if (visualization_frame == "lidar") {
-    set_posestamp_wrt_lidar(msg_body_pose);
-  } else if (visualization_frame == "imu") {
-    set_posestamp_wrt_imu(msg_body_pose);
-  } else { throw invalid_argument("Invalid visualization frame has been given"); }
+  set_posestamp(msg_body_pose, visualization_frame);
   msg_body_pose.header.stamp    = ros::Time().fromSec(lidar_end_time);
   msg_body_pose.header.frame_id = map_frame;
 
@@ -804,6 +843,7 @@ int main(int argc, char **argv) {
   nh.param<string>("common/map_frame", map_frame, "map");
   nh.param<string>("common/lidar_frame", lidar_frame, "lidar");
   nh.param<string>("common/base_frame", base_frame, "base");
+  nh.param<string>("common/imu_frame", imu_frame, "base");
   nh.param<string>("common/visualization_frame", visualization_frame, "imu");
   nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
   nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
@@ -875,6 +915,48 @@ int main(int argc, char **argv) {
     cout << "Adaptive voxel size: " << filter_size_map_smaller << "\033[0m" << endl;
   }
 
+  tf::TransformListener listener;
+  tf::StampedTransform  transform;
+
+  vector<double> extrinT_Lidar_wrt_Base(3, 0.0);
+  vector<double> extrinR_Lidar_wrt_Base(9, 0.0);
+  try {
+    listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
+    listener.lookupTransform(base_frame, lidar_frame, ros::Time(0), transform);
+
+    // Translation
+    extrinT_Lidar_wrt_Base[0] = transform.getOrigin().x();
+    extrinT_Lidar_wrt_Base[1] = transform.getOrigin().y();
+    extrinT_Lidar_wrt_Base[2] = transform.getOrigin().z();
+
+    ROS_INFO("Translation: [%f, %f, %f]",
+             extrinT_Lidar_wrt_Base[0],
+             extrinT_Lidar_wrt_Base[1],
+             extrinT_Lidar_wrt_Base[2]);
+
+    // Rotation (Matrix)
+    tf::Matrix3x3 m(transform.getRotation());
+    for (int      i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        extrinR_Lidar_wrt_Base[i * 3 + j] = m[i][j];
+      }
+    }
+
+    ROS_INFO("Rotation (Quaternion): [%f, %f, %f, %f]",
+             transform.getRotation().x(),
+             transform.getRotation().y(),
+             transform.getRotation().z(),
+             transform.getRotation().w());
+
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    ROS_INFO("Rotation (RPY in radians): [%f, %f, %f]", roll, pitch, yaw);
+    ROS_INFO("Rotation (RPY in degrees): [%f, %f, %f]", roll * 180.0 / M_PI, pitch * 180.0 / M_PI, yaw * 180.0 / M_PI);
+
+  } catch (tf::TransformException &ex) {
+    ROS_ERROR("%s", ex.what());
+  }
+
   /*** variables definition ***/
   int    effect_feat_num                 = 0, frame_num = 0;
   double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
@@ -895,6 +977,8 @@ int main(int argc, char **argv) {
 
   Lidar_T_wrt_IMU << VEC_FROM_ARRAY(extrinT);
   Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
+  Lidar_T_wrt_Base << VEC_FROM_ARRAY(extrinT_Lidar_wrt_Base);
+  Lidar_R_wrt_Base << MAT_FROM_ARRAY(extrinR_Lidar_wrt_Base);
   p_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
   p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
   p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));

@@ -3,10 +3,12 @@ common:
   imu_topic: "/hamilton/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
   map_frame: "hamilton/map"
-  lidar_frame: "hamilton/base"
-  base_frame: "hamilton/imu"   # Originally, base frame of FAST-LIO2 is IMU frame
+  lidar_frame: "hamilton/ouster_link"
+  # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
+  base_frame: "hamilton/base"  # extrsincis should be given by tf message
+  imu_frame: "hamilton/imu"    # Originally, base frame of FAST-LIO2 is IMU frame
 
-  visualization_frame: "lidar" # "lidar" or "imu" (default: "imu")
+  visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu")
 
 preprocess:
                               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
