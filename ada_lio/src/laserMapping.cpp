@@ -102,7 +102,7 @@ int    num_thr_adaptive_voxelization, num_thr_adaptive_voxelization_neighbor;
 int    degeneracy_tick_criteria     = 3, degeneracy_tick = degeneracy_tick_criteria + 1;
 bool   point_selected_surf[100000]  = {0};
 bool   lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
-bool   scan_pub_en                  = false, dense_pub_en = false, scan_body_pub_en = false;
+bool   scan_pub_en                  = false, dense_pub_en = false, scan_body_pub_en = false, scan_base_pub_en = false;
 
 vector<vector<int>>               pointSearchInd_surf;
 vector<BoxPointType>              cub_needrm;
@@ -237,6 +237,16 @@ void pclPointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
   po->x         = p_body_imu(0);
   po->y         = p_body_imu(1);
   po->z         = p_body_imu(2);
+  po->intensity = pi->intensity;
+}
+
+void pclPointBodyLidarToBase(PointType const *const pi, PointType *const po) {
+  V3D p_body_lidar(pi->x, pi->y, pi->z);
+  V3D p_body_base(Lidar_R_wrt_Base * p_body_lidar + Lidar_T_wrt_Base);
+
+  po->x         = p_body_base(0);
+  po->y         = p_body_base(1);
+  po->z         = p_body_base(2);
   po->intensity = pi->intensity;
 }
 
@@ -569,20 +579,29 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
   }
 }
 
-void publish_frame_body(const ros::Publisher &pubLaserCloudFull_body) {
+void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string viz_frame="imu") {
   int                 size = feats_undistort->points.size();
-  PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
-
-  for (int i = 0; i < size; i++) {
-    pclPointBodyLidarToIMU(&feats_undistort->points[i], \
-                            &laserCloudIMUBody->points[i]);
-  }
-
+  PointCloudXYZI::Ptr laserCloudTransformed(new PointCloudXYZI(size, 1));
   sensor_msgs::PointCloud2 laserCloudmsg;
-  pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
-  laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
-  laserCloudmsg.header.frame_id = lidar_frame;
-  pubLaserCloudFull_body.publish(laserCloudmsg);
+  if (viz_frame == "imu") {
+    for (int i = 0; i < size; i++) {
+      pclPointBodyLidarToIMU(&feats_undistort->points[i], \
+                            &laserCloudTransformed->points[i]);
+    }
+    pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
+    laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
+    laserCloudmsg.header.frame_id = imu_frame;
+  } else if (viz_frame == "base") {
+    for (int i = 0; i < size; i++) {
+      pclPointBodyLidarToBase(&feats_undistort->points[i], \
+                            &laserCloudTransformed->points[i]);
+    }
+    pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
+    laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
+    laserCloudmsg.header.frame_id = base_frame;
+  } else { throw std::invalid_argument("Invalid frame has been given"); }
+
+  pubLaserCloudFull.publish(laserCloudmsg);
   publish_count -= PUBFRAME_PERIOD;
 }
 
@@ -835,6 +854,7 @@ int main(int argc, char **argv) {
   nh.param<bool>("publish/scan_publish_en", scan_pub_en, true);
   nh.param<bool>("publish/dense_publish_en", dense_pub_en, true);
   nh.param<bool>("publish/scan_bodyframe_pub_en", scan_body_pub_en, true);
+  nh.param<bool>("publish/scan_baseframe_pub_en", scan_body_pub_en, true);
   nh.param<int>("max_iteration", NUM_MAX_ITERATIONS, 4);
   nh.param<string>("map_file_path", map_file_path, "");
   nh.param<string>("common/save_dir", save_dir, "");
@@ -1011,6 +1031,8 @@ int main(int argc, char **argv) {
     ("/" + robot_name + "/locus/cloud_registered", 100000);
   ros::Publisher  pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>
     ("/" + robot_name + "/locus/cloud_registered_body", 100000);
+  ros::Publisher  pubLaserCloudFull_base = nh.advertise<sensor_msgs::PointCloud2>
+    ("/" + robot_name + "/locus/cloud_registered_base", 100000);
   ros::Publisher  pubOdomAftMapped       = nh.advertise<nav_msgs::Odometry>
     ("/" + robot_name + "/locus/odometry", 100000);
   ros::Publisher  pubPath                = nh.advertise<nav_msgs::Path>
@@ -1163,7 +1185,8 @@ int main(int argc, char **argv) {
       /******* Publish points *******/
       if (path_en) publish_path(pubPath);
       if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFull);
-      if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
+      if (scan_pub_en && scan_body_pub_en) publish_frame(pubLaserCloudFull_body, "imu");
+      if (scan_pub_en && scan_base_pub_en) publish_frame(pubLaserCloudFull_base, "base");
 
       /*** Debug variables ***/
       if (runtime_pos_log) {
