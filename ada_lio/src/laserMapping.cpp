@@ -940,41 +940,56 @@ int main(int argc, char **argv) {
 
   vector<double> extrinT_Lidar_wrt_Base(3, 0.0);
   vector<double> extrinR_Lidar_wrt_Base(9, 0.0);
-  try {
-    listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
-    listener.lookupTransform(base_frame, lidar_frame, ros::Time(0), transform);
 
-    // Translation
-    extrinT_Lidar_wrt_Base[0] = transform.getOrigin().x();
-    extrinT_Lidar_wrt_Base[1] = transform.getOrigin().y();
-    extrinT_Lidar_wrt_Base[2] = transform.getOrigin().z();
+  /**
+   * Currently, some Kimera-Multi bags have no tfs, so only support it in the case robots are from the DCIST project
+   */
+  bool is_dcist = robot_name == "hamilton" || robot_name == "TBU1" || robot_name == "TBU2";
+  if (is_dcist) {
+    try {
+      listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
+      listener.lookupTransform(base_frame, lidar_frame, ros::Time(0), transform);
 
-    ROS_INFO("Translation: [%f, %f, %f]",
-             extrinT_Lidar_wrt_Base[0],
-             extrinT_Lidar_wrt_Base[1],
-             extrinT_Lidar_wrt_Base[2]);
+      // Translation
+      extrinT_Lidar_wrt_Base[0] = transform.getOrigin().x();
+      extrinT_Lidar_wrt_Base[1] = transform.getOrigin().y();
+      extrinT_Lidar_wrt_Base[2] = transform.getOrigin().z();
 
-    // Rotation (Matrix)
-    tf::Matrix3x3 m(transform.getRotation());
-    for (int      i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        extrinR_Lidar_wrt_Base[i * 3 + j] = m[i][j];
+      ROS_INFO("Translation: [%f, %f, %f]",
+               extrinT_Lidar_wrt_Base[0],
+               extrinT_Lidar_wrt_Base[1],
+               extrinT_Lidar_wrt_Base[2]);
+
+      // Rotation (Matrix)
+      tf::Matrix3x3 m(transform.getRotation());
+      for (int      i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          extrinR_Lidar_wrt_Base[i * 3 + j] = m[i][j];
+        }
       }
+
+      ROS_INFO("Rotation (Quaternion): [%f, %f, %f, %f]",
+               transform.getRotation().x(),
+               transform.getRotation().y(),
+               transform.getRotation().z(),
+               transform.getRotation().w());
+
+      double roll, pitch, yaw;
+      m.getRPY(roll, pitch, yaw);
+      ROS_INFO("Rotation (RPY in radians): [%f, %f, %f]", roll, pitch, yaw);
+      ROS_INFO("Rotation (RPY in degrees): [%f, %f, %f]",
+               roll * 180.0 / M_PI,
+               pitch * 180.0 / M_PI,
+               yaw * 180.0 / M_PI);
+
+    } catch (tf::TransformException &ex) {
+      ROS_ERROR("%s", ex.what());
     }
-
-    ROS_INFO("Rotation (Quaternion): [%f, %f, %f, %f]",
-             transform.getRotation().x(),
-             transform.getRotation().y(),
-             transform.getRotation().z(),
-             transform.getRotation().w());
-
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
-    ROS_INFO("Rotation (RPY in radians): [%f, %f, %f]", roll, pitch, yaw);
-    ROS_INFO("Rotation (RPY in degrees): [%f, %f, %f]", roll * 180.0 / M_PI, pitch * 180.0 / M_PI, yaw * 180.0 / M_PI);
-
-  } catch (tf::TransformException &ex) {
-    ROS_ERROR("%s", ex.what());
+  } else {
+    if (visualization_frame == "base") {
+      throw invalid_argument("Not supported for non-DCIST robots!");
+      return 0;
+    }
   }
 
   /*** variables definition ***/
@@ -1128,7 +1143,7 @@ int main(int argc, char **argv) {
       int    featsFromMapNum = ikdtree.validnum();
       kdtree_size_st = ikdtree.size();
 
-      cout << "effect num:" << effct_feat_num << endl;
+//      cout << "effect num:" << effct_feat_num << endl;
 
       /*** ICP and iterated Kalman filter update ***/
       if (feats_down_size < 5) {
@@ -1186,7 +1201,7 @@ int main(int argc, char **argv) {
       if (path_en) publish_path(pubPath);
       if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFull);
       if (scan_pub_en && scan_body_pub_en) publish_frame(pubLaserCloudFull_body, "imu");
-      if (scan_pub_en && scan_base_pub_en) publish_frame(pubLaserCloudFull_base, "base");
+      if (scan_pub_en && scan_base_pub_en && is_dcist) publish_frame(pubLaserCloudFull_base, "base");
 
       /*** Debug variables ***/
       if (runtime_pos_log) {
