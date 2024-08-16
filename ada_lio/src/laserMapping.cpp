@@ -987,7 +987,7 @@ int main(int argc, char **argv) {
     }
   } else {
     if (visualization_frame == "base") {
-      throw invalid_argument("Not supported for non-DCIST robots!");
+      throw invalid_argument("[SPARK-LIO] Not supported for non-DCIST robots!");
       return 0;
     }
   }
