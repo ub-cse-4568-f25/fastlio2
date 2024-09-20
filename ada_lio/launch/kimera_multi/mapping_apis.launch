@@ -21,7 +21,7 @@
   <node pkg="spark_fast_lio" type="adalio_mapping" name="$(anon laserMapping)" output="screen" />
 
   <group if="$(arg rviz)">
-  <node launch-prefix="nice" pkg="rviz" type="rviz" name="$(anon rviz)" args="-d $(find spark_fast_lio)/rviz.rviz"/>
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="$(anon rviz)" args="-d $(find spark_fast_lio)/rviz/kimera-multi/apis.rviz"/>
   </group>
 
 </launch>

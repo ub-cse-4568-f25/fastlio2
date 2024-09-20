@@ -40,6 +40,16 @@ Originally, the base frame of FAST-LIO2 is the IMU frame.
 However, for our pipeline, the `+x`, `+y`, and `+z` directions of the pose need to be forward, left, and up, respectively.
 Therefore, I set the visualization_frame parameter to adjust the final coordinates accordingly.
 
+In addition, `lidar_frame` and `base_frame` should be provided by TF.
+
+So please before you run the launch file, please check whether tf exists or not by following command:
+
+```
+rosrun tf tf_echo ${BASE_FRAME} ${LiDAR_FRAME}
+// e.g.,
+rosrun tf tf_echo apis/base apis/ouster_link
+```
+
 ---
 
 ## ToDo 

@@ -618,11 +618,11 @@ std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_base_frame() 
   // offset_A_B: transformation matrix of A w.r.t. B
   static const auto &offset_R_B_I = state_point.offset_R_L_I * Lidar_R_wrt_Base.inverse();
   static const auto &offset_T_B_I = -1 * offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
-  Eigen::Vector3d lidar_position = offset_R_B_I.inverse()
+  Eigen::Vector3d base_position = offset_R_B_I.inverse()
       * (state_point.rot * offset_T_B_I + state_point.pos - offset_T_B_I);
-  Eigen::Quaterniond lidar_orientation = Eigen::Quaterniond(offset_R_B_I.inverse() * state_point.rot * offset_R_B_I);
+  Eigen::Quaterniond base_orientation = Eigen::Quaterniond(offset_R_B_I.inverse() * state_point.rot * offset_R_B_I);
 
-  return std::make_tuple(lidar_position, lidar_orientation);
+  return std::make_tuple(base_position, base_orientation);
 }
 
 template<typename T>
@@ -944,7 +944,7 @@ int main(int argc, char **argv) {
   /**
    * Currently, some Kimera-Multi bags have no tfs, so only support it in the case robots are from the DCIST project
    */
-  bool is_dcist = robot_name == "hamilton" || robot_name == "TBU1" || robot_name == "TBU2";
+  bool is_dcist = robot_name == "hamilton" || robot_name == "TBU1" || robot_name == "TBU2" || robot_name == "apis";
   if (is_dcist) {
     try {
       listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
