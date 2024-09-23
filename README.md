@@ -13,6 +13,7 @@ cd ${YOUR_WORKSPACE}/src
 git clone git@github.mit.edu:SPARK/spark_fast_lio.git
 cd spark_fast_lio
 git submodule update --init --recursive
+cd ../..
 catkin build -DCMAKE_BUILD_TYPE=Release
 ```
 
