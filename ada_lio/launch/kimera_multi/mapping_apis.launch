@@ -10,6 +10,9 @@
     <rosparam command="load" file="$(find spark_fast_lio)/config/kimera_multi/12_08_apis.yaml" />
   </group>
 
+
+  <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="tf_for_apis" args="0 0 0 0 0 0 1 $(arg robot_name)/map $(arg robot_name)/odom"/> -->
+
   <param name="common/save_dir" type="string" value="$(arg save_dir)"/>
   <param name="common/sequence_name" type="string" value="$(arg sequence_name)"/>
   <param name="common/robot_name" type="string" value="$(arg robot_name)"/>

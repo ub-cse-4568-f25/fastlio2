@@ -6,9 +6,9 @@ common:
   lidar_frame: "hamilton/ouster_link"
   # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
   base_frame: "hamilton/base"  # extrsincis should be given by tf message
-  imu_frame: "hamilton/imu"    # Originally, base frame of FAST-LIO2 is IMU frame
+  imu_frame: "hamilton/imu"    
 
-  visualization_frame: "imu" # "lidar", "base", or "imu" (default: "imu")
+  visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu", but for run Hydra, it should be "base")
 
 preprocess:
                               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
@@ -53,7 +53,8 @@ publish:
   path_en: true
   scan_publish_en: true        # false: close all the point cloud output
   dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
-  scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+  scan_lidarframe_pub_en: true # true: output the point cloud scans in the LiDAR frame
+  scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body frame
   scan_baseframe_pub_en: true  # true: output the point cloud scans in the base frame
 
 pcd_save:

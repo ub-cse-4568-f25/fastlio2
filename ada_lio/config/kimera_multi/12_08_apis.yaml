@@ -2,12 +2,14 @@ common:
   lid_topic: "/apis/lidar_points"
   imu_topic: "/apis/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "apis/odom"       # "apis/map"
+  map_frame: "apis/map"       # "apis/map"
   lidar_frame: "apis/ouster_link"
-  base_frame: "apis/base"     #apis/imu"      # Originally, base frame of FAST-LIO2 is IMU frame
-   
-  # "lidar", "imu", or "base" (default: "imu". "lidar" may lead to additional computational cost.)
-  visualization_frame: "base" 
+  # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
+  base_frame: "apis/base"                  # extrsincis should be given by tf message
+  imu_frame: "camera_imu_optical_frame"     
+
+  visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu", but for run Hydra, it should be "base")
+
 preprocess:
                               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
   lidar_type: 4               # 4 for ouster LiDAR in Kimera-Multi dataset (KMOUST64)
@@ -47,7 +49,10 @@ publish:
   path_en: true
   scan_publish_en: true        # false: close all the point cloud output
   dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
-  scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+  scan_lidarframe_pub_en: true # true: output the point cloud scans in the LiDAR frame
+  scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body frame
+  scan_baseframe_pub_en: false # true: output the point cloud scans in the base frame
+
 
 pcd_save:
   pcd_save_en: true

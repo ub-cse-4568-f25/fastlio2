@@ -3,7 +3,7 @@
   <arg name="rviz" default="true" />
   <arg name="use_adaptive_voxelization" default="false" />
   <arg name="save_dir" default="" />
-  <arg name="sequence_name" default="" />
+  <arg name="sequence_name" default="12_08_acl_jackal2" />
   <arg name="robot_name" default="" />
 
   <group if="$(eval arg('sequence_name') == '12_08_acl_jackal2')">
