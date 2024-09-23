@@ -3,11 +3,21 @@
 + Original: [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
 
 
-## How to build and use
-+ Put the code in your workspace/src folder
+## How to build
+
+
+Put the code in your workspace/src folder
+
 ```shell
+cd ${YOUR_WORKSPACE}/src
+git clone git@github.mit.edu:SPARK/spark_fast_lio.git
+cd spark_fast_lio
+git submodule update --init --recursive
 catkin build -DCMAKE_BUILD_TYPE=Release
 ```
+
+## How to use
+
 + Then run
 
 ```shell
@@ -36,18 +46,37 @@ For this reason, just in case, I separated and parameterized the sequence_name a
 
 ## Note for MIT Guys (especially for SPARK)
 
-Originally, the base frame of FAST-LIO2 is the IMU frame.
+### Tip 1
+
+Originally, the estimated poses of FAST-LIO2 is **the IMU frame**.
 However, for our pipeline, the `+x`, `+y`, and `+z` directions of the pose need to be forward, left, and up, respectively.
-Therefore, I set the visualization_frame parameter to adjust the final coordinates accordingly.
+Therefore, I set the visualization_frame parameter to adjust the final coordinates accordingly (see [here](https://github.mit.edu/SPARK/spark_fast_lio/blob/6cdcb73f88003dbc27db9e365bc49f6c5d6e3f10/ada_lio/config/dcist/hamilton.yaml#L11)).
 
-In addition, `lidar_frame` and `base_frame` should be provided by TF.
+### Tip 2
 
-So please before you run the launch file, please check whether tf exists or not by following command:
+To follow the tip 1 above, `lidar_frame` and `base_frame` should be provided by `/tf_static`.
+
+So before you run the launch file, please check whether `tf` exists by using the following command:
 
 ```
 rosrun tf tf_echo ${BASE_FRAME} ${LiDAR_FRAME}
 // e.g.,
 rosrun tf tf_echo apis/base apis/ouster_link
+```
+
+### Tip 3
+
+To substitute LOCUS with SPARK-FAST-LIO, you can easily do it by using the following command:
+
+```
+    <!-- Lidar Odometry (LOCUS) -->
+<!--    <include file="$(find dcist_spark_core)/launch/perception/locus/locus.launch" if="$(arg run_lidar_odom)">-->
+<!--        <arg name="robot_name" value="$(arg robot_name)"/>-->
+<!--        <arg name="robot_type" value="$(arg robot_type)"/>-->
+<!--    </include>-->
+    <include file="$(find spark_fast_lio)/launch/dcist/mapping_hamilton.launch" if="$(arg run_lidar_odom)">
+       <arg name="robot_name" value="$(arg robot_name)"/>
+   </include>
 ```
 
 ---
