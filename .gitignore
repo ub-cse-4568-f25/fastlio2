@@ -4,6 +4,11 @@ cmake-build-debug*
 # Created by https://www.gitignore.io/api/c++,code,cmake,eclipse
 # Edit at https://www.gitignore.io/?templates=c++,code,cmake,eclipse
 
+ada_lio/Log/*
+ada_lio/PCD/*
+ada_lio/PCD/*.pcd
+*.txt
+
 ### C++ ###
 # Prerequisites
 *.d
