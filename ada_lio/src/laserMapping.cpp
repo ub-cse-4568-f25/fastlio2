@@ -102,7 +102,7 @@ int    num_thr_adaptive_voxelization, num_thr_adaptive_voxelization_neighbor;
 int    degeneracy_tick_criteria     = 3, degeneracy_tick = degeneracy_tick_criteria + 1;
 bool   point_selected_surf[100000]  = {0};
 bool   lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
-bool   scan_pub_en                  = false, dense_pub_en = false, scan_body_pub_en = false, scan_base_pub_en = false;
+bool   scan_pub_en                  = false, dense_pub_en = false, scan_lidar_pub_en = false, scan_body_pub_en = false, scan_base_pub_en = false;
 
 vector<vector<int>>               pointSearchInd_surf;
 vector<BoxPointType>              cub_needrm;
@@ -583,7 +583,14 @@ void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string vi
   int                 size = feats_undistort->points.size();
   PointCloudXYZI::Ptr laserCloudTransformed(new PointCloudXYZI(size, 1));
   sensor_msgs::PointCloud2 laserCloudmsg;
-  if (viz_frame == "imu") {
+  if (viz_frame == "lidar") {
+    for (int i = 0; i < size; i++) {
+      laserCloudTransformed->points[i] = feats_undistort->points[i];
+    }
+    pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
+    laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
+    laserCloudmsg.header.frame_id = lidar_frame;
+  } else if (viz_frame == "imu") {
     for (int i = 0; i < size; i++) {
       pclPointBodyLidarToIMU(&feats_undistort->points[i], \
                             &laserCloudTransformed->points[i]);
@@ -616,8 +623,9 @@ std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_lidar_frame()
 
 std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_base_frame() {
   // offset_A_B: transformation matrix of A w.r.t. B
-  static const auto &offset_R_B_I = state_point.offset_R_L_I * Lidar_R_wrt_Base.inverse();
-  static const auto &offset_T_B_I = -1 * offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
+  static const Eigen::Matrix3d offset_R_B_I = state_point.offset_R_L_I * Lidar_R_wrt_Base.inverse();
+  static const Eigen::Vector3d offset_T_B_I = -offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
+
   Eigen::Vector3d base_position = offset_R_B_I.inverse()
       * (state_point.rot * offset_T_B_I + state_point.pos - offset_T_B_I);
   Eigen::Quaterniond base_orientation = Eigen::Quaterniond(offset_R_B_I.inverse() * state_point.rot * offset_R_B_I);
@@ -708,12 +716,17 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   q.setY(odomAftMapped.pose.pose.orientation.y);
   q.setZ(odomAftMapped.pose.pose.orientation.z);
   transform.setRotation(q);
-  br_imu.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, imu_frame));
+  /***
+   * Note, currently, its `map_frame` indicates the origin of the each sensor's coordinates,
+   * so broadcasting them at the same time breaks down th TF relationship
+   ***/
+
+  // br_imu.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, imu_frame));
 
   // Transformation w.r.t. LiDAR frame
-  transform.setOrigin(tf::Vector3(lidar_position(0), lidar_position(1), lidar_position(2)));
-  transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(), lidar_orientation.z(), lidar_orientation.w()));
-  br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, lidar_frame));
+  // transform.setOrigin(tf::Vector3(lidar_position(0), lidar_position(1), lidar_position(2)));
+  // transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(), lidar_orientation.z(), lidar_orientation.w()));
+  // br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, lidar_frame));
 
   // Transformation w.r.t. base frame
   const auto &[base_position, base_orientation] = transform_pose_wrt_base_frame();
@@ -853,6 +866,7 @@ int main(int argc, char **argv) {
   nh.param<bool>("publish/path_en", path_en, true);
   nh.param<bool>("publish/scan_publish_en", scan_pub_en, true);
   nh.param<bool>("publish/dense_publish_en", dense_pub_en, true);
+  nh.param<bool>("publish/scan_lidarframe_pub_en", scan_lidar_pub_en, true);
   nh.param<bool>("publish/scan_bodyframe_pub_en", scan_body_pub_en, true);
   nh.param<bool>("publish/scan_baseframe_pub_en", scan_body_pub_en, true);
   nh.param<int>("max_iteration", NUM_MAX_ITERATIONS, 4);
@@ -908,6 +922,7 @@ int main(int argc, char **argv) {
   std::cout << "\033[1;32mextrinR of " << robot_name << ": " << extrinR[0] << " " << extrinR[1] << " " << extrinR[2] << "\n";
   std::cout << space << extrinR[3] << " " << extrinR[4] << " " << extrinR[5] << "\n";
   std::cout << space << extrinR[6] << " " << extrinR[7] << " " << extrinR[8] << "\n\033[0m";
+  std::cout << "\033[1;32mNote, those variables should be set in the yaml file by manual!" << "\n\033[0m";
 
   // Flush
   std::string prefix = save_dir + "/" + sequence_name;
@@ -944,9 +959,12 @@ int main(int argc, char **argv) {
   /**
    * Currently, some Kimera-Multi bags have no tfs, so only support it in the case robots are from the DCIST project
    */
-  bool is_dcist = robot_name == "hamilton" || robot_name == "TBU1" || robot_name == "TBU2" || robot_name == "apis";
+
+  bool is_dcist = robot_name == "hamilton" || robot_name == "acl_jackal" || robot_name == "acl_jackal2" || robot_name == "apis" \
+                || robot_name == "sparkal1" || robot_name == "sparkal2" || robot_name == "hathor" || robot_name == "thoth" || robot_name == "sobek";
   if (is_dcist) {
     try {
+      std::cout << base_frame << "  " << lidar_frame << std::endl;
       listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
       listener.lookupTransform(base_frame, lidar_frame, ros::Time(0), transform);
 
@@ -1044,6 +1062,8 @@ int main(int argc, char **argv) {
   ros::Subscriber sub_imu                = nh.subscribe(imu_topic, 200000, imu_cbk);
   ros::Publisher  pubLaserCloudFull      = nh.advertise<sensor_msgs::PointCloud2>
     ("/" + robot_name + "/locus/cloud_registered", 100000);
+  ros::Publisher  pubLaserCloudFull_lidar = nh.advertise<sensor_msgs::PointCloud2>
+    ("/" + robot_name + "/locus/cloud_registered_lidar", 100000);
   ros::Publisher  pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>
     ("/" + robot_name + "/locus/cloud_registered_body", 100000);
   ros::Publisher  pubLaserCloudFull_base = nh.advertise<sensor_msgs::PointCloud2>
@@ -1200,6 +1220,7 @@ int main(int argc, char **argv) {
       /******* Publish points *******/
       if (path_en) publish_path(pubPath);
       if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFull);
+      if (scan_pub_en && scan_lidar_pub_en) publish_frame(pubLaserCloudFull_lidar, "lidar");
       if (scan_pub_en && scan_body_pub_en) publish_frame(pubLaserCloudFull_body, "imu");
       if (scan_pub_en && scan_base_pub_en && is_dcist) publish_frame(pubLaserCloudFull_base, "base");
 
