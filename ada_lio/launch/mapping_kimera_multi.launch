@@ -3,12 +3,10 @@
   <arg name="rviz" default="true" />
   <arg name="use_adaptive_voxelization" default="false" />
   <arg name="save_dir" default="" />
-  <arg name="sequence_name" default="" />
+  <arg name="sequence_name" default="12_08_acl_jackal2" />
   <arg name="robot_name" default="" />
 
-  <group if="$(eval arg('sequence_name') == '12_08_sparkal1')">
-    <rosparam command="load" file="$(find spark_fast_lio)/config/kimera_multi/12_08_sparkal1.yaml" />
-  </group>
+  <rosparam command="load" file="$(find spark_fast_lio)/config/kimera_multi/$(arg robot_name).yaml" />
 
   <param name="common/save_dir" type="string" value="$(arg save_dir)"/>
   <param name="common/sequence_name" type="string" value="$(arg sequence_name)"/>
@@ -21,7 +19,7 @@
   <node pkg="spark_fast_lio" type="adalio_mapping" name="$(anon laserMapping)" output="screen" />
 
   <group if="$(arg rviz)">
-  <node launch-prefix="nice" pkg="rviz" type="rviz" name="$(anon rviz)" args="-d $(find spark_fast_lio)/rviz.rviz"/>
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="$(anon rviz)" args="-d $(find spark_fast_lio)/rviz/kimera_multi/$(arg robot_name)_rviz.rviz"/>
   </group>
 
 </launch>

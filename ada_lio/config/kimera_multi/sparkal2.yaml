@@ -1,12 +1,14 @@
 common:
-  lid_topic: "/sparkal1/lidar_points"
-  imu_topic: "/sparkal1/forward/imu"
+  lid_topic: "/sparkal2/lidar_points"
+  imu_topic: "/sparkal2/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "sparkal1/map"
-  lidar_frame: "sparkal1/base"
-  base_frame: "sparkal1/imu"  # Originally, base frame of FAST-LIO2 is IMU frame
+  map_frame: "sparkal2/map"
+  lidar_frame: "sparkal2/velodyne"
+  # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
+  base_frame: "sparkal2/base"                  # extrsincis should be given by tf message
+  imu_frame: "sparkal2/forward_imu_optical_frame"     
 
-  visualization_frame: "imu"  # "lidar" or "imu" (default: "imu". "lidar" may lead to additional computational cost.)
+  visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu", but for run Hydra, it should be "base")
 
 preprocess:
   lidar_type: 2               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
@@ -25,10 +27,10 @@ mapping:
   det_range: 100.0
   extrinsic_est_en: false      # true: enable the online estimation of IMU-LiDAR extrinsic,
 
-  extrinsic_T: [ 0.0494615,  0.10735763, -0.07427067 ]
-  extrinsic_R: [ -4.3653500000e-03, -9.9999000000e-01, -5.4567700000e-04,
-                  2.3024800000e-04, 5.4467700000e-04, -1.0000000000e+00,
-                  9.9999000000e-01, -4.3654700000e-03, 2.2786900000e-04  ]
+  extrinsic_T: [ 0.04954139,  0.10765999, -0.07398268 ]
+  extrinsic_R: [ -3.9953200000e-03, -9.9999200000e-01, -7.0463100000e-04,
+                 -3.7156900000e-03, 7.1947700000e-04, -9.9999300000e-01,
+                  9.9998500000e-01, -3.9926700000e-03, -3.7185400000e-03  ]
 
 filter_size_map: 0.3
 

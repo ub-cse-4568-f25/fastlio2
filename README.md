@@ -87,6 +87,7 @@ To substitute LOCUS with SPARK-FAST-LIO, you can easily do it by using the follo
 - [X] Set all the launch files for convenience
 - [X] Support DCIST project
 - [ ] Remove adaptive mode part (due to patent issue from KAIST)
+- [ ] Resolve TF issue between LiDAR and body frame (ToDo. Check the origin of the Kimera-VIO's map frame)
 
 ---
 
