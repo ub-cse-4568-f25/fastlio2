@@ -2,11 +2,13 @@ common:
   lid_topic: "/hathor/lidar_points"
   imu_topic: "/hathor/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "hathor/map"
-  lidar_frame: "hathor/base"
-  base_frame: "hathor/imu"    # Originally, base frame of FAST-LIO2 is IMU frame
+  map_frame: "hathor/odom"
+  lidar_frame: "hathor/velodyne_link"
+  # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
+  base_frame: "hathor/base"                  # extrsincis should be given by tf message
+  imu_frame: "camera_imu_optical_frame"     
 
-  visualization_frame: "imu"  # "lidar" or "imu" (default: "imu". "lidar" may lead to additional computational cost.)
+  visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu", but for run Hydra, it should be "base")
 
 preprocess:
   lidar_type: 2               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,

@@ -2,7 +2,7 @@ common:
   lid_topic: "/acl_jackal2/lidar_points"
   imu_topic: "/acl_jackal2/forward/imu"
   time_sync_en: false             # ONLY turn on when external time synchronization is really not possible
-  map_frame: "acl_jackal2/map"
+  map_frame: "acl_jackal2/odom"
   lidar_frame: "acl_jackal2/velodyne_link"
   # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
   base_frame: "acl_jackal2/base"                  # extrsincis should be given by tf message

@@ -2,7 +2,7 @@ common:
   lid_topic: "/sparkal2/lidar_points"
   imu_topic: "/sparkal2/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "sparkal2/map"
+  map_frame: "sparkal2/odom"
   lidar_frame: "sparkal2/velodyne"
   # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
   base_frame: "sparkal2/base"                  # extrsincis should be given by tf message

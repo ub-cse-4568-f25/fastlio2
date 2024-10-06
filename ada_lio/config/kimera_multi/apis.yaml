@@ -2,7 +2,7 @@ common:
   lid_topic: "/apis/lidar_points"
   imu_topic: "/apis/forward/imu"
   time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-  map_frame: "apis/map"       # "apis/map"
+  map_frame: "apis/odom"  
   lidar_frame: "apis/ouster_link"
   # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
   base_frame: "apis/base"                  # extrsincis should be given by tf message
