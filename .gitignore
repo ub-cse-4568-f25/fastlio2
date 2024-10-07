@@ -8,6 +8,7 @@ ada_lio/Log/*
 ada_lio/PCD/*
 ada_lio/PCD/*.pcd
 *.txt
+ada_lio/Log/mat_pre.txt
 
 ### C++ ###
 # Prerequisites
