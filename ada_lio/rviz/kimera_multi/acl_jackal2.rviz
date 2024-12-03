@@ -41,7 +41,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: surround
+    SyncSource: currPoints
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -109,8 +109,8 @@ Visualization Manager:
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 12.021187782287598
-            Min Value: -0.9052130579948425
+            Max Value: 25.507568359375
+            Min Value: 6.620689392089844
             Value: true
           Axis: Z
           Channel Name: intensity
@@ -306,7 +306,7 @@ Visualization Manager:
   Global Options:
     Background Color: 0; 0; 0
     Default Light: true
-    Fixed Frame: acl_jackal2/map
+    Fixed Frame: acl_jackal2/odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -330,7 +330,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 73.94103240966797
+      Distance: 138.11886596679688
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -338,17 +338,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -3.1908092498779297
-        Y: 3.887712240219116
-        Z: -3.044067621231079
+        X: 12.956299781799316
+        Y: -93.31354522705078
+        Z: -7.075627326965332
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9052023887634277
+      Pitch: 1.5202018022537231
       Target Frame: body
-      Yaw: 4.050380706787109
+      Yaw: 3.385376214981079
     Saved: ~
 Window Geometry:
   Displays:
@@ -366,5 +366,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 2007
-  X: 4406
-  Y: 521
+  X: 1932
+  Y: 614
