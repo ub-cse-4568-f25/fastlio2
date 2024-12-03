@@ -97,6 +97,7 @@ double neighbor_xy_thres            = 0.0;
 int    effct_feat_num               = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
 int    iterCount                    = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0,
        pcd_save_interval            = -1, pcd_index = 0;
+int    point_filter_num             = 4; // empirically, 4 showed the best performance
 int    feats_down_size_neighbor     = numeric_limits<int>::max();
 int    num_thr_adaptive_voxelization, num_thr_adaptive_voxelization_neighbor;
 int    degeneracy_tick_criteria     = 3, degeneracy_tick = degeneracy_tick_criteria + 1;
@@ -114,6 +115,7 @@ deque<PointCloudXYZI::Ptr>        lidar_buffer;
 deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 
 PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
+PointCloudXYZI::Ptr cloud_undistort(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_down_world(new PointCloudXYZI());
@@ -524,7 +526,7 @@ void map_incremental() {
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
 void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
   if (scan_pub_en) {
-    PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
+    PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? cloud_undistort : feats_down_body);
     int                 size = laserCloudFullRes->points.size();
     PointCloudXYZI::Ptr laserCloudWorld(\
                         new PointCloudXYZI(size, 1));
@@ -580,19 +582,19 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
 }
 
 void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string viz_frame="imu") {
-  int                 size = feats_undistort->points.size();
+  int                 size = cloud_undistort->points.size();
   PointCloudXYZI::Ptr laserCloudTransformed(new PointCloudXYZI(size, 1));
   sensor_msgs::PointCloud2 laserCloudmsg;
   if (viz_frame == "lidar") {
     for (int i = 0; i < size; i++) {
-      laserCloudTransformed->points[i] = feats_undistort->points[i];
+      laserCloudTransformed->points[i] = cloud_undistort->points[i];
     }
     pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
     laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
     laserCloudmsg.header.frame_id = lidar_frame;
   } else if (viz_frame == "imu") {
     for (int i = 0; i < size; i++) {
-      pclPointBodyLidarToIMU(&feats_undistort->points[i], \
+      pclPointBodyLidarToIMU(&cloud_undistort->points[i], \
                             &laserCloudTransformed->points[i]);
     }
     pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
@@ -600,7 +602,7 @@ void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string vi
     laserCloudmsg.header.frame_id = imu_frame;
   } else if (viz_frame == "base") {
     for (int i = 0; i < size; i++) {
-      pclPointBodyLidarToBase(&feats_undistort->points[i], \
+      pclPointBodyLidarToBase(&cloud_undistort->points[i], \
                             &laserCloudTransformed->points[i]);
     }
     pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
@@ -896,7 +898,8 @@ int main(int argc, char **argv) {
   nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
   nh.param<int>("preprocess/timestamp_unit", p_pre->time_unit, US);
   nh.param<int>("preprocess/scan_rate", p_pre->SCAN_RATE, 10);
-  nh.param<int>("point_filter_num", p_pre->point_filter_num, 2);
+  nh.param<int>("preprocess/point_filter_num", p_pre->point_filter_num, 1);
+  nh.param<int>("point_filter_num", point_filter_num, 4);
   nh.param<bool>("feature_extract_enable", p_pre->feature_enabled, false);
   nh.param<bool>("runtime_pos_log_enable", runtime_pos_log, 0);
   nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, false);
@@ -961,7 +964,7 @@ int main(int argc, char **argv) {
    */
 
   bool is_dcist = robot_name == "hamilton" || robot_name == "acl_jackal" || robot_name == "acl_jackal2" || robot_name == "apis" \
-                || robot_name == "sparkal1" || robot_name == "sparkal2" || robot_name == "hathor" || robot_name == "thoth" || robot_name == "sobek";
+                || robot_name == "hydra_multi_sparkal1" || robot_name == "sparkal1" || robot_name == "sparkal2" || robot_name == "hathor" || robot_name == "thoth" || robot_name == "sobek";
   if (is_dcist) {
     try {
       std::cout << base_frame << "  " << lidar_frame << std::endl;
@@ -1096,7 +1099,18 @@ int main(int argc, char **argv) {
       svd_time           = 0;
       t0                 = omp_get_wtime();
 
-      p_imu->Process(Measures, kf, feats_undistort);
+      // NOTE(hyungtae) Place resampling outside `Process` function to get full cloud point, i.e., `cloud_undistort`
+      cloud_undistort->clear();
+      feats_undistort->clear();
+      p_imu->Process(Measures, kf, cloud_undistort);
+      feats_undistort->reserve(cloud_undistort->size() / point_filter_num);
+      for (int i = 0; i < cloud_undistort->points.size(); ++i) {
+        const auto &pt = cloud_undistort->points[i];
+        if (i % point_filter_num != 0) continue;
+        feats_undistort->points.emplace_back(pt);
+      }
+      // std::cout << Measures.lidar->size() << " vs " << cloud_undistort->size() <<  " vs " << feats_undistort->size() << std::endl;
+      
       state_point = kf.get_x();
       pos_lid     = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
