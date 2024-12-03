@@ -31,9 +31,17 @@ Especially, in the **Kimera-Multi** dataset,
 
 ```
 roslaunch spark_fast_lio mapping_${ROBOT_NAME}.launch save_dir:=${DIRECTORY} sequence_name:="${DATE}_{ROBOT_NAME}" robot_name:="${ROBOT_NAME}" 
-// e.g.,
-roslaunch spark_fast_lio mapping_sobek.launch save_dir:=${DIRECTORY} sequence_name:="12_08_sobek" robot_name:="sobek" 
 ```
+
+E.g.,
+
+```
+roslaunch spark_fast_lio mapping_kimera_multi.launch save_dir:=/home/shapelim/tmp sequence_name:="10_14_acl_jackal2_tmp" robot_name:="acl_jackal2"
+```
+
+Note, `save_dir` and `sequence_name` are only for the saving trajectory purpose. So you can ignore it.
+
+---
 
 For **DCIST** project,
 
