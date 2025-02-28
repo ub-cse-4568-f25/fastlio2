@@ -1,38 +1,41 @@
 # import matplotlib
 # matplotlib.use('Agg')
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-
-#######for ikfom
-fig, axs = plt.subplots(4,2)
+# for ikfom
+fig, axs = plt.subplots(4, 2)
 lab_pre = ['', 'pre-x', 'pre-y', 'pre-z']
 lab_out = ['', 'out-x', 'out-y', 'out-z']
-plot_ind = range(7,10)
-a_pre=np.loadtxt('mat_pre.txt')
-a_out=np.loadtxt('mat_out.txt')
-time=a_pre[:,0]
-axs[0,0].set_title('Attitude')
-axs[1,0].set_title('Translation')
-axs[2,0].set_title('Extrins-R')
-axs[3,0].set_title('Extrins-T')
-axs[0,1].set_title('Velocity')
-axs[1,1].set_title('bg')
-axs[2,1].set_title('ba')
-axs[3,1].set_title('Gravity')
-for i in range(1,4):
+plot_ind = range(7, 10)
+a_pre = np.loadtxt('mat_pre.txt')
+a_out = np.loadtxt('mat_out.txt')
+time = a_pre[:, 0]
+axs[0, 0].set_title('Attitude')
+axs[1, 0].set_title('Translation')
+axs[2, 0].set_title('Extrins-R')
+axs[3, 0].set_title('Extrins-T')
+axs[0, 1].set_title('Velocity')
+axs[1, 1].set_title('bg')
+axs[2, 1].set_title('ba')
+axs[3, 1].set_title('Gravity')
+for i in range(1, 4):
     for j in range(8):
-        axs[j%4, j/4].plot(time, a_pre[:,i+j*3],'.-', label=lab_pre[i])
-        axs[j%4, j/4].plot(time, a_out[:,i+j*3],'.-', label=lab_out[i])
+        axs[j % 4, j / 4].plot(time,
+                               a_pre[:, i + j * 3],
+                               '.-',
+                               label=lab_pre[i])
+        axs[j % 4, j / 4].plot(time,
+                               a_out[:, i + j * 3],
+                               '.-',
+                               label=lab_out[i])
 for j in range(8):
     # axs[j].set_xlim(386,389)
-    axs[j%4, j/4].grid()
-    axs[j%4, j/4].legend()
+    axs[j % 4, j / 4].grid()
+    axs[j % 4, j / 4].legend()
 plt.grid()
-#######for ikfom#######
 
-
-#### Draw IMU data
+# Draw IMU data
 # fig, axs = plt.subplots(2)
 # imu=np.loadtxt('imu.txt')
 # time=imu[:,0]
@@ -80,9 +83,32 @@ plt.grid()
 # ax2.set_ylabel('Compute Time (ms)',font1)
 # ax2.yaxis.label.set_color('red')
 # ax2.tick_params(axis='y', colors='red')
-# ax2.boxplot(a_out1[:,1]*1000, showfliers=False, positions=[1.1],boxprops=dict(color=c),capprops=dict(color=c),whiskerprops=dict(color=c))
-# ax2.boxplot(a_out2[:,1]*1000, showfliers=False, positions=[2.1],boxprops=dict(color=c),capprops=dict(color=c),whiskerprops=dict(color=c))
-# ax2.boxplot(a_out3[:,1]*1000, showfliers=False, positions=[3.1],boxprops=dict(color=c),capprops=dict(color=c),whiskerprops=dict(color=c))
+# ax2.boxplot(
+#     a_out1[:, 1] * 1000,
+#     showfliers=False,
+#     positions=[1.1],
+#     boxprops=dict(color=c),
+#     capprops=dict(color=c),
+#     whiskerprops=dict(color=c)
+# )
+
+# ax2.boxplot(
+#     a_out2[:, 1] * 1000,
+#     showfliers=False,
+#     positions=[2.1],
+#     boxprops=dict(color=c),
+#     capprops=dict(color=c),
+#     whiskerprops=dict(color=c)
+# )
+
+# ax2.boxplot(
+#     a_out3[:, 1] * 1000,
+#     showfliers=False,
+#     positions=[3.1],
+#     boxprops=dict(color=c),
+#     capprops=dict(color=c),
+#     whiskerprops=dict(color=c)
+# )
 # ax2.set_xlim([0.5, 3.5])
 # ax2.set_ylim([0, 100])
 

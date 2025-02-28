@@ -3,9 +3,9 @@ common:
     imu_topic:  "/livox/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
     map_frame: "map"
-    
+
 preprocess:
-    lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
+    lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
     scan_line:  6
     blind: 4
 
@@ -29,7 +29,7 @@ adaptive:
     neighbor_xy_thres: 5.0 # xy neighbor threshold
     num_thr_adaptive_voxelization: 700
     num_thr_adaptive_voxelization_neighbor: 300 # For Velodyne 16, this method is not applicable
-    
+
 publish:
     path_en:  false
     scan_publish_en:  true       # false: close all the point cloud output
@@ -38,5 +38,5 @@ publish:
 
 pcd_save:
     pcd_save_en: true
-    interval: -1                 # how many LiDAR frames saved in each pcd file; 
+    interval: -1                 # how many LiDAR frames saved in each pcd file;
                                  # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

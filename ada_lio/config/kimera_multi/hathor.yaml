@@ -6,7 +6,7 @@ common:
   lidar_frame: "hathor/velodyne_link"
   # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
   base_frame: "hathor/base"                  # extrsincis should be given by tf message
-  imu_frame: "camera_imu_optical_frame"     
+  imu_frame: "camera_imu_optical_frame"
 
   visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu", but for run Hydra, it should be "base")
 
@@ -50,7 +50,6 @@ pcd_save:
 feature_extract_enable: false
 runtime_pos_log_enable: false
 point_filter_num_for_preprocessing: 1 # If it is set to `1`, full point cloud gonna be publlished
-point_filter_num: 4                   # For pose estimation. 
+point_filter_num: 4                   # For pose estimation.
 max_iteration: 4
 cube_side_length: 1000
-

@@ -1,10 +1,8 @@
 # FAST-LIO2 for Kimera-Multi Dataset and DCIST Project
 
-+ Original: [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
-
+- Original: [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
 
 ## How to build
-
 
 Put the code in your workspace/src folder
 
@@ -19,7 +17,7 @@ catkin build -DCMAKE_BUILD_TYPE=Release
 
 ## How to use
 
-+ Then run
+- Then run
 
 ```shell
 roslaunch spark_fast_lio mapping_ouster.launch
@@ -30,7 +28,7 @@ roslaunch spark_fast_lio mapping_livox.launch
 Especially, in the **Kimera-Multi** dataset,
 
 ```
-roslaunch spark_fast_lio mapping_${ROBOT_NAME}.launch save_dir:=${DIRECTORY} sequence_name:="${DATE}_{ROBOT_NAME}" robot_name:="${ROBOT_NAME}" 
+roslaunch spark_fast_lio mapping_${ROBOT_NAME}.launch save_dir:=${DIRECTORY} sequence_name:="${DATE}_{ROBOT_NAME}" robot_name:="${ROBOT_NAME}"
 ```
 
 E.g.,
@@ -41,16 +39,16 @@ roslaunch spark_fast_lio mapping_kimera_multi.launch save_dir:=/home/shapelim/tm
 
 Note, `save_dir` and `sequence_name` are only for the saving trajectory purpose. So you can ignore it.
 
----
+______________________________________________________________________
 
 For **DCIST** project,
 
 ```
-roslaunch spark_fast_lio mapping_hamilton.launch robot_name:="hamilton" 
+roslaunch spark_fast_lio mapping_hamilton.launch robot_name:="hamilton"
 ```
 
 Q. Why do we need to specify the robot name?
-Because in `10_14` datatset, those are recorded by `acl_jackal2` (hidden secret by Yun). 
+Because in `10_14` datatset, those are recorded by `acl_jackal2` (hidden secret by Yun).
 For this reason, just in case, I separated and parameterized the sequence_name and robot_name.
 
 ## Note for MIT Guys (especially for SPARK)
@@ -88,20 +86,20 @@ To substitute LOCUS with SPARK-FAST-LIO, you can easily do it by using the follo
    </include>
 ```
 
----
+______________________________________________________________________
 
-## ToDo 
+## ToDo
 
-- [X] Set all the launch files for convenience
-- [X] Support DCIST project
-- [ ] Remove adaptive mode part (due to patent issue from KAIST)
-- [ ] Resolve TF issue between LiDAR and body frame (ToDo. Check the origin of the Kimera-VIO's map frame)
+- \[X\] Set all the launch files for convenience
+- \[X\] Support DCIST project
+- \[ \] Remove adaptive mode part (due to patent issue from KAIST)
+- \[ \] Resolve TF issue between LiDAR and body frame (ToDo. Check the origin of the Kimera-VIO's map frame)
 
----
+______________________________________________________________________
 
 ## Note - how to use `Adaptive mode` (yet will be deprecated soon)
 
-+ Edit parameters in `.yaml` files
+- Edit parameters in `.yaml` files
 
 ```yaml
 filter_size_map: 0.5 #bigger voxel size
@@ -112,4 +110,3 @@ adaptive:
     num_thr_adaptive_voxelization: 700
     num_thr_adaptive_voxelization_neighbor: 300 # For Velodyne 16, this method is not applicable
 ```
-

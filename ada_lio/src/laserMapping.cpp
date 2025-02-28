@@ -32,86 +32,91 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-#include <omp.h>
-#include <mutex>
 #include <math.h>
-#include <thread>
-#include <fstream>
-#include <csignal>
 #include <unistd.h>
-#include <Python.h>
-#include <so3_math.h>
-#include <ros/ros.h>
+
+#include <csignal>
+#include <fstream>
+#include <mutex>
+#include <thread>
+
 #include <Eigen/Core>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
-#include <visualization_msgs/Marker.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/io/pcd_io.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <tf/transform_listener.h>
-#include <tf/transform_datatypes.h>
-#include <tf/transform_broadcaster.h>
+#include <Python.h>
 #include <geometry_msgs/Vector3.h>
 #include <livox_ros_driver/CustomMsg.h>
-#include "IMU_Processing.hpp"
-#include "preprocess.h"
-#include "ikd_Tree.h"
+#include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
+#include <omp.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <ros/ros.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <so3_math.h>
+#include <tf/transform_broadcaster.h>
+#include <tf/transform_datatypes.h>
+#include <tf/transform_listener.h>
+#include <visualization_msgs/Marker.h>
 
-#define INIT_TIME           (0.1)
-#define LASER_POINT_COV     (0.001)
-#define MAXN                (720000)
-#define PUBFRAME_PERIOD     (20)
+#include "./IMU_Processing.hpp"
+#include "./ikd_Tree.h"
+#include "./preprocess.h"
+
+#define INIT_TIME (0.1)
+#define LASER_POINT_COV (0.001)
+#define MAXN (720000)
+#define PUBFRAME_PERIOD (20)
 
 /*** Time Log Variables ***/
 double kdtree_incremental_time = 0.0, kdtree_search_time = 0.0, kdtree_delete_time = 0.0;
-double T1[MAXN], s_plot[MAXN], s_plot2[MAXN], s_plot3[MAXN], s_plot4[MAXN], s_plot5[MAXN], s_plot6[MAXN], s_plot7[MAXN],
-       s_plot8[MAXN], s_plot9[MAXN], s_plot10[MAXN], s_plot11[MAXN];
-double match_time              = 0, solve_time = 0, solve_const_H_time = 0;
-int    kdtree_size_st          = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
-bool   runtime_pos_log         = false, pcd_save_en = false, adaptive_voxelization_en = false, time_sync_en = false,
-       extrinsic_est_en        = true, path_en = true;
+double T1[MAXN], s_plot[MAXN], s_plot2[MAXN], s_plot3[MAXN], s_plot4[MAXN], s_plot5[MAXN],
+    s_plot6[MAXN], s_plot7[MAXN], s_plot8[MAXN], s_plot9[MAXN], s_plot10[MAXN], s_plot11[MAXN];
+double match_time = 0, solve_time = 0, solve_const_H_time = 0;
+int kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
+bool runtime_pos_log = false, pcd_save_en = false, adaptive_voxelization_en = false,
+     time_sync_en = false, extrinsic_est_en = true, path_en = true;
 /**************************/
 
-float       res_last[100000] = {0.0};
-float       DET_RANGE        = 300.0f;
-const float MOV_THRESHOLD    = 1.5f;
+float res_last[100000]    = {0.0};
+float DET_RANGE           = 300.0f;
+const float MOV_THRESHOLD = 1.5f;
 
-mutex              mtx_buffer;
+mutex mtx_buffer;
 condition_variable sig_buffer;
 
 string root_dir = ROOT_DIR;
 string sequence_name, save_dir, robot_name;
-string map_file_path, lid_topic, imu_topic, map_frame, lidar_frame, base_frame, imu_frame, visualization_frame;
+string map_file_path, lid_topic, imu_topic, map_frame, lidar_frame, base_frame, imu_frame,
+    visualization_frame;
 
-double res_mean_last                = 0.05, total_residual = 0.0;
-double last_timestamp_lidar         = 0, last_timestamp_imu = -1.0;
-double gyr_cov                      = 0.1, acc_cov = 0.1, b_gyr_cov = 0.0001, b_acc_cov = 0.0001;
-double filter_size_map_smaller      = 0, filter_size_map_min = 0, fov_deg = 0;
-double cube_len                     = 0, HALF_FOV_COS = 0, FOV_DEG = 0, total_distance = 0, lidar_end_time = 0,
-       first_lidar_time             = 0.0;
-double neighbor_xy_thres            = 0.0;
-int    effct_feat_num               = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
-int    iterCount                    = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0,
-       pcd_save_interval            = -1, pcd_index = 0;
-int    point_filter_num             = 4; // empirically, 4 showed the best performance
-int    feats_down_size_neighbor     = numeric_limits<int>::max();
-int    num_thr_adaptive_voxelization, num_thr_adaptive_voxelization_neighbor;
-int    degeneracy_tick_criteria     = 3, degeneracy_tick = degeneracy_tick_criteria + 1;
-bool   point_selected_surf[100000]  = {0};
-bool   lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
-bool   scan_pub_en                  = false, dense_pub_en = false, scan_lidar_pub_en = false, scan_body_pub_en = false, scan_base_pub_en = false;
+double res_mean_last = 0.05, total_residual = 0.0;
+double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
+double gyr_cov = 0.1, acc_cov = 0.1, b_gyr_cov = 0.0001, b_acc_cov = 0.0001;
+double filter_size_map_smaller = 0, filter_size_map_min = 0, fov_deg = 0;
+double cube_len = 0, HALF_FOV_COS = 0, FOV_DEG = 0, total_distance = 0, lidar_end_time = 0,
+       first_lidar_time  = 0.0;
+double neighbor_xy_thres = 0.0;
+int effct_feat_num = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
+int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0,
+    pcd_save_interval = -1, pcd_index = 0;
+int point_filter_num         = 4;  // empirically, 4 showed the best performance
+int feats_down_size_neighbor = numeric_limits<int>::max();
+int num_thr_adaptive_voxelization, num_thr_adaptive_voxelization_neighbor;
+int degeneracy_tick_criteria = 3, degeneracy_tick = degeneracy_tick_criteria + 1;
+bool point_selected_surf[100000] = {0};
+bool lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
+bool scan_pub_en = false, dense_pub_en = false, scan_lidar_pub_en = false, scan_body_pub_en = false,
+     scan_base_pub_en = false;
 
-vector<vector<int>>               pointSearchInd_surf;
-vector<BoxPointType>              cub_needrm;
-vector<PointVector>               Nearest_Points;
-vector<double>                    extrinT(3, 0.0);
-vector<double>                    extrinR(9, 0.0);
-deque<double>                     time_buffer;
-deque<PointCloudXYZI::Ptr>        lidar_buffer;
+vector<vector<int>> pointSearchInd_surf;
+vector<BoxPointType> cub_needrm;
+vector<PointVector> Nearest_Points;
+vector<double> extrinT(3, 0.0);
+vector<double> extrinR(9, 0.0);
+deque<double> time_buffer;
+deque<PointCloudXYZI::Ptr> lidar_buffer;
 deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 
 PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
@@ -140,14 +145,14 @@ V3D Lidar_T_wrt_Base(Zero3d);
 M3D Lidar_R_wrt_Base(Eye3d);
 
 /*** EKF inputs and output ***/
-MeasureGroup                                 Measures;
+MeasureGroup Measures;
 esekfom::esekf<state_ikfom, 12, input_ikfom> kf;
-state_ikfom                                  state_point;
-vect3                                        pos_lid;
+state_ikfom state_point;
+vect3 pos_lid;
 
-nav_msgs::Path             path;
-nav_msgs::Odometry         odomAftMapped;
-geometry_msgs::Quaternion  geoQuat;
+nav_msgs::Path path;
+nav_msgs::Odometry odomAftMapped;
+geometry_msgs::Quaternion geoQuat;
 geometry_msgs::PoseStamped msg_body_pose;
 
 shared_ptr<Preprocess> p_pre(new Preprocess());
@@ -164,14 +169,15 @@ void SigHandle(int sig) {
 inline void dump_lio_state_to_log(FILE *fp) {
   V3D rot_ang(Log(state_point.rot.toRotationMatrix()));
   fprintf(fp, "%lf ", Measures.lidar_beg_time - first_lidar_time);
-  fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                   // Angle
-  fprintf(fp, "%lf %lf %lf ", state_point.pos(0), state_point.pos(1), state_point.pos(2)); // Pos
-  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                        // omega
-  fprintf(fp, "%lf %lf %lf ", state_point.vel(0), state_point.vel(1), state_point.vel(2)); // Vel
-  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                        // Acc
-  fprintf(fp, "%lf %lf %lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));    // Bias_g
-  fprintf(fp, "%lf %lf %lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));    // Bias_a
-  fprintf(fp, "%lf %lf %lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]); // Bias_a
+  fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                          // Angle
+  fprintf(fp, "%lf %lf %lf ", state_point.pos(0), state_point.pos(1), state_point.pos(2));  // Pos
+  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                               // omega
+  fprintf(fp, "%lf %lf %lf ", state_point.vel(0), state_point.vel(1), state_point.vel(2));  // Vel
+  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                               // Acc
+  fprintf(fp, "%lf %lf %lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));  // Bias_g
+  fprintf(fp, "%lf %lf %lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));  // Bias_a
+  fprintf(
+      fp, "%lf %lf %lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]);  // Bias_a
   fprintf(fp, "\r\n");
   fflush(fp);
 }
@@ -204,7 +210,8 @@ void pointBodyToWorld_ikfom(PointType const *const pi, PointType *const po, stat
 
 void pointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
+  V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) +
+               state_point.pos);
 
   po->x         = p_global(0);
   po->y         = p_global(1);
@@ -212,10 +219,11 @@ void pointBodyToWorld(PointType const *const pi, PointType *const po) {
   po->intensity = pi->intensity;
 }
 
-template<typename T>
+template <typename T>
 void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po) {
   V3D p_body(pi[0], pi[1], pi[2]);
-  V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
+  V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) +
+               state_point.pos);
 
   po[0] = p_global(0);
   po[1] = p_global(1);
@@ -224,7 +232,8 @@ void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po) {
 
 void pclPointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
+  V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) +
+               state_point.pos);
 
   po->x         = p_global(0);
   po->y         = p_global(1);
@@ -275,7 +284,6 @@ void pclPointIMUToBase(PointType const *const pi, PointType *const po) {
   po->intensity = pi->intensity;
 }
 
-
 void points_cache_collect() {
   PointVector points_history;
   ikdtree.acquire_removed_points(points_history);
@@ -283,13 +291,13 @@ void points_cache_collect() {
 }
 
 BoxPointType LocalMap_Points;
-bool         Localmap_Initialized = false;
+bool Localmap_Initialized = false;
 void lasermap_fov_segment() {
   cub_needrm.clear();
   kdtree_delete_counter = 0;
   kdtree_delete_time    = 0.0;
   pointBodyToWorld(XAxisPoint_body, XAxisPoint_world);
-  V3D      pos_LiD      = pos_lid;
+  V3D pos_LiD = pos_lid;
   if (!Localmap_Initialized) {
     for (int i = 0; i < 3; i++) {
       LocalMap_Points.vertex_min[i] = pos_LiD(i) - cube_len / 2.0;
@@ -298,21 +306,21 @@ void lasermap_fov_segment() {
     Localmap_Initialized = true;
     return;
   }
-  float    dist_to_map_edge[3][2];
-  bool     need_move    = false;
-  for (int i            = 0; i < 3; i++) {
+  float dist_to_map_edge[3][2];
+  bool need_move = false;
+  for (int i = 0; i < 3; i++) {
     dist_to_map_edge[i][0] = fabs(pos_LiD(i) - LocalMap_Points.vertex_min[i]);
     dist_to_map_edge[i][1] = fabs(pos_LiD(i) - LocalMap_Points.vertex_max[i]);
-    if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE || dist_to_map_edge[i][1] <= MOV_THRESHOLD * DET_RANGE)
+    if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE ||
+        dist_to_map_edge[i][1] <= MOV_THRESHOLD * DET_RANGE)
       need_move = true;
   }
   if (!need_move) return;
   BoxPointType New_LocalMap_Points, tmp_boxpoints;
   New_LocalMap_Points = LocalMap_Points;
-  float
-           mov_dist =
-    max((cube_len - 2.0 * MOV_THRESHOLD * DET_RANGE) * 0.5 * 0.9, double(DET_RANGE * (MOV_THRESHOLD - 1)));
-  for (int i        = 0; i < 3; i++) {
+  float mov_dist      = max((cube_len - 2.0 * MOV_THRESHOLD * DET_RANGE) * 0.5 * 0.9,
+                       static_cast<double>(DET_RANGE * (MOV_THRESHOLD - 1)));
+  for (int i = 0; i < 3; i++) {
     tmp_boxpoints = LocalMap_Points;
     if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE) {
       New_LocalMap_Points.vertex_max[i] -= mov_dist;
@@ -354,7 +362,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
 }
 
 double timediff_lidar_wrt_imu = 0.0;
-bool   timediff_set_flg       = false;
+bool timediff_set_flg         = false;
 void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
   mtx_buffer.lock();
   double preprocess_start_time = omp_get_wtime();
@@ -365,14 +373,15 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
   }
   last_timestamp_lidar = msg->header.stamp.toSec();
 
-  if (!time_sync_en && abs(last_timestamp_imu - last_timestamp_lidar) > 10.0 && !imu_buffer.empty()
-    && !lidar_buffer.empty()) {
+  if (!time_sync_en && abs(last_timestamp_imu - last_timestamp_lidar) > 10.0 &&
+      !imu_buffer.empty() && !lidar_buffer.empty()) {
     printf("IMU and LiDAR not Synced, IMU time: %lf, lidar header time: %lf \n",
            last_timestamp_imu,
            last_timestamp_lidar);
   }
 
-  if (time_sync_en && !timediff_set_flg && abs(last_timestamp_lidar - last_timestamp_imu) > 1 && !imu_buffer.empty()) {
+  if (time_sync_en && !timediff_set_flg && abs(last_timestamp_lidar - last_timestamp_imu) > 1 &&
+      !imu_buffer.empty()) {
     timediff_set_flg       = true;
     timediff_lidar_wrt_imu = last_timestamp_lidar + 0.1 - last_timestamp_imu;
     printf("Self sync IMU and LiDAR, time diff is %.10lf \n", timediff_lidar_wrt_imu);
@@ -394,8 +403,7 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
   sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
 
   if (abs(timediff_lidar_wrt_imu) > 0.1 && time_sync_en) {
-    msg->header.stamp = \
-        ros::Time().fromSec(timediff_lidar_wrt_imu + msg_in->header.stamp.toSec());
+    msg->header.stamp = ros::Time().fromSec(timediff_lidar_wrt_imu + msg_in->header.stamp.toSec());
   }
 
   double timestamp = msg->header.stamp.toSec();
@@ -415,9 +423,11 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
 }
 
 double lidar_mean_scantime = 0.0;
-int    scan_num            = 0;
+int scan_num               = 0;
 bool sync_packages(MeasureGroup &meas, bool verbose) {
-  if (verbose) std::cout << "\033[1;34m" << lidar_buffer.size() << " vs " << imu_buffer.size() << "\033[0m" << std::endl;
+  if (verbose)
+    std::cout << "\033[1;34m" << lidar_buffer.size() << " vs " << imu_buffer.size() << "\033[0m"
+              << std::endl;
 
   if (lidar_buffer.empty() || imu_buffer.empty()) {
     return false;
@@ -425,22 +435,28 @@ bool sync_packages(MeasureGroup &meas, bool verbose) {
 
   /*** push a lidar scan ***/
   if (!lidar_pushed) {
-    meas.lidar          = lidar_buffer.front();
-    meas.lidar_beg_time = time_buffer.front();
-    if (meas.lidar->points.size() <= 1) // time too little
-    {
+    meas.lidar                = lidar_buffer.front();
+    meas.lidar_beg_time       = time_buffer.front();
+    static double denominator = 1000;
+    // time too little
+    if (meas.lidar->points.size() <= 1) {
       lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
       ROS_WARN("Too few input point cloud!\n");
-    } else if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime) {
+    } else if (meas.lidar->points.back().curvature / denominator < 0.5 * lidar_mean_scantime) {
       lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
     } else {
       scan_num++;
       if (meas.lidar->points.back().curvature < 80 || meas.lidar->points.back().curvature > 120) {
-        std::cout << "\033[1;33m[Warning] meas.lidar->points.back().curvature (" << meas.lidar->points.back().curvature << ") should be close to 100\033[0m" << std::endl;
-        std::cout << "\033[1;33m[Warning] Please check the `timestamp_unit` or values of `time` (or `t`) field of the point cloud input from your sensor\033[0m" << std::endl;
+        std::cout << "\033[1;33m[Warning] meas.lidar->points.back().curvature ("
+                  << meas.lidar->points.back().curvature << ") should be close to 100\033[0m"
+                  << std::endl;
+        std::cout << "\033[1;33m[Warning] Please check the `timestamp_unit` or values of `time` "
+                     "(or `t`) field of the point cloud input from your sensor\033[0m"
+                  << std::endl;
       }
-      lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);
-      lidar_mean_scantime += (meas.lidar->points.back().curvature / double(1000) - lidar_mean_scantime) / scan_num;
+      lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / denominator;
+      lidar_mean_scantime +=
+          (meas.lidar->points.back().curvature / denominator - lidar_mean_scantime) / scan_num;
     }
 
     meas.lidar_end_time = lidar_end_time;
@@ -487,19 +503,22 @@ void map_incremental() {
     /* decide if need add to map */
     if (!Nearest_Points[i].empty() && flg_EKF_inited) {
       const PointVector &points_near = Nearest_Points[i];
-      bool              need_add     = true;
-      BoxPointType      Box_of_Point;
-      PointType         downsample_result, mid_point;
+      bool need_add                  = true;
+      BoxPointType Box_of_Point;
+      PointType downsample_result, mid_point;
       mid_point.x =
-        floor(feats_down_world->points[i].x / filter_size_map_min) * filter_size_map_min + 0.5 * filter_size_map_min;
+          floor(feats_down_world->points[i].x / filter_size_map_min) * filter_size_map_min +
+          0.5 * filter_size_map_min;
       mid_point.y =
-        floor(feats_down_world->points[i].y / filter_size_map_min) * filter_size_map_min + 0.5 * filter_size_map_min;
+          floor(feats_down_world->points[i].y / filter_size_map_min) * filter_size_map_min +
+          0.5 * filter_size_map_min;
       mid_point.z =
-        floor(feats_down_world->points[i].z / filter_size_map_min) * filter_size_map_min + 0.5 * filter_size_map_min;
+          floor(feats_down_world->points[i].z / filter_size_map_min) * filter_size_map_min +
+          0.5 * filter_size_map_min;
       float dist = calc_dist(feats_down_world->points[i], mid_point);
-      if (fabs(points_near[0].x - mid_point.x) > 0.5 * filter_size_map_min
-        && fabs(points_near[0].y - mid_point.y) > 0.5 * filter_size_map_min
-        && fabs(points_near[0].z - mid_point.z) > 0.5 * filter_size_map_min) {
+      if (fabs(points_near[0].x - mid_point.x) > 0.5 * filter_size_map_min &&
+          fabs(points_near[0].y - mid_point.y) > 0.5 * filter_size_map_min &&
+          fabs(points_near[0].z - mid_point.z) > 0.5 * filter_size_map_min) {
         PointNoNeedDownsample.push_back(feats_down_world->points[i]);
         continue;
       }
@@ -527,9 +546,8 @@ PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
 void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
   if (scan_pub_en) {
     PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? cloud_undistort : feats_down_body);
-    int                 size = laserCloudFullRes->points.size();
-    PointCloudXYZI::Ptr laserCloudWorld(\
-                        new PointCloudXYZI(size, 1));
+    int size = laserCloudFullRes->points.size();
+    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
     PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
     for (int i = 0; i < size; i++) {
       if (visualization_frame == "imu") {
@@ -540,7 +558,9 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
       } else if (visualization_frame == "base") {
         pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudTmp->points[i]);
         pclPointIMUToBase(&laserCloudTmp->points[i], &laserCloudWorld->points[i]);
-      } else { throw invalid_argument("Invalid visualization frame has been given"); }
+      } else {
+        throw invalid_argument("Invalid visualization frame has been given");
+      }
     }
 
     sensor_msgs::PointCloud2 laserCloudmsg;
@@ -555,13 +575,11 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
   /* 1. make sure you have enough memories
   /* 2. noted that pcd save will influence the real-time performences **/
   if (pcd_save_en) {
-    int                 size = cloud_undistort->points.size();
-    PointCloudXYZI::Ptr laserCloudWorld(\
-                        new PointCloudXYZI(size, 1));
+    int size = cloud_undistort->points.size();
+    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
-      pclPointBodyToWorld(&cloud_undistort->points[i], \
-                                &laserCloudWorld->points[i]);
+      pclPointBodyToWorld(&cloud_undistort->points[i], &laserCloudWorld->points[i]);
     }
     *pcl_wait_save += *laserCloudWorld;
 
@@ -569,7 +587,8 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
     scan_wait_num++;
     if (pcl_wait_save->size() > 0 && pcd_save_interval > 0 && scan_wait_num >= pcd_save_interval) {
       pcd_index++;
-      string         all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
+      string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) +
+                            string(".pcd"));
       pcl::PCDWriter pcd_writer;
       cout << "current scan saved to /PCD/" << all_points_dir << endl;
       pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
@@ -579,8 +598,8 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
   }
 }
 
-void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string viz_frame="imu") {
-  int                 size = cloud_undistort->points.size();
+void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string viz_frame = "imu") {
+  int size = cloud_undistort->points.size();
   PointCloudXYZI::Ptr laserCloudTransformed(new PointCloudXYZI(size, 1));
   sensor_msgs::PointCloud2 laserCloudmsg;
   if (viz_frame == "lidar") {
@@ -592,21 +611,21 @@ void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string vi
     laserCloudmsg.header.frame_id = lidar_frame;
   } else if (viz_frame == "imu") {
     for (int i = 0; i < size; i++) {
-      pclPointBodyLidarToIMU(&cloud_undistort->points[i], \
-                            &laserCloudTransformed->points[i]);
+      pclPointBodyLidarToIMU(&cloud_undistort->points[i], &laserCloudTransformed->points[i]);
     }
     pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
     laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
     laserCloudmsg.header.frame_id = imu_frame;
   } else if (viz_frame == "base") {
     for (int i = 0; i < size; i++) {
-      pclPointBodyLidarToBase(&cloud_undistort->points[i], \
-                            &laserCloudTransformed->points[i]);
+      pclPointBodyLidarToBase(&cloud_undistort->points[i], &laserCloudTransformed->points[i]);
     }
     pcl::toROSMsg(*laserCloudTransformed, laserCloudmsg);
     laserCloudmsg.header.stamp    = ros::Time().fromSec(lidar_end_time);
     laserCloudmsg.header.frame_id = base_frame;
-  } else { throw std::invalid_argument("Invalid frame has been given"); }
+  } else {
+    throw std::invalid_argument("Invalid frame has been given");
+  }
 
   pubLaserCloudFull.publish(laserCloudmsg);
   publish_count -= PUBFRAME_PERIOD;
@@ -614,9 +633,11 @@ void publish_frame(const ros::Publisher &pubLaserCloudFull, const std::string vi
 
 std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_lidar_frame() {
   // offset_A_B: transformation matrix of A w.r.t. B
-  Eigen::Vector3d lidar_position = state_point.offset_R_L_I.inverse()
-      * (state_point.rot * state_point.offset_T_L_I + state_point.pos - state_point.offset_T_L_I);
-  Eigen::Quaterniond lidar_orientation = state_point.offset_R_L_I.inverse() * state_point.rot * state_point.offset_R_L_I;
+  Eigen::Vector3d lidar_position =
+      state_point.offset_R_L_I.inverse() *
+      (state_point.rot * state_point.offset_T_L_I + state_point.pos - state_point.offset_T_L_I);
+  Eigen::Quaterniond lidar_orientation =
+      state_point.offset_R_L_I.inverse() * state_point.rot * state_point.offset_R_L_I;
 
   return std::make_tuple(lidar_position, lidar_orientation);
 }
@@ -624,17 +645,19 @@ std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_lidar_frame()
 std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transform_pose_wrt_base_frame() {
   // offset_A_B: transformation matrix of A w.r.t. B
   static const Eigen::Matrix3d offset_R_B_I = state_point.offset_R_L_I * Lidar_R_wrt_Base.inverse();
-  static const Eigen::Vector3d offset_T_B_I = -offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
+  static const Eigen::Vector3d offset_T_B_I =
+      -offset_R_B_I * Lidar_T_wrt_Base + state_point.offset_T_L_I;
 
-  Eigen::Vector3d base_position = offset_R_B_I.inverse()
-      * (state_point.rot * offset_T_B_I + state_point.pos - offset_T_B_I);
-  Eigen::Quaterniond base_orientation = Eigen::Quaterniond(offset_R_B_I.inverse() * state_point.rot * offset_R_B_I);
+  Eigen::Vector3d base_position =
+      offset_R_B_I.inverse() * (state_point.rot * offset_T_B_I + state_point.pos - offset_T_B_I);
+  Eigen::Quaterniond base_orientation =
+      Eigen::Quaterniond(offset_R_B_I.inverse() * state_point.rot * offset_R_B_I);
 
   return std::make_tuple(base_position, base_orientation);
 }
 
-template<typename T>
-void set_posestamp(T &out, const::string viz_frame="imu") {
+template <typename T>
+void set_posestamp(T &out, const ::string viz_frame = "imu") {
   if (viz_frame == "imu") {
     out.pose.position.x    = state_point.pos(0);
     out.pose.position.y    = state_point.pos(1);
@@ -645,40 +668,45 @@ void set_posestamp(T &out, const::string viz_frame="imu") {
     out.pose.orientation.w = geoQuat.w;
   } else if (viz_frame == "lidar") {
     const auto &[position, orientation] = transform_pose_wrt_lidar_frame();
-    out.pose.position.x    = position(0);
-    out.pose.position.y    = position(1);
-    out.pose.position.z    = position(2);
-    out.pose.orientation.x = orientation.x();
-    out.pose.orientation.y = orientation.y();
-    out.pose.orientation.z = orientation.z();
-    out.pose.orientation.w = orientation.w();
+    out.pose.position.x                 = position(0);
+    out.pose.position.y                 = position(1);
+    out.pose.position.z                 = position(2);
+    out.pose.orientation.x              = orientation.x();
+    out.pose.orientation.y              = orientation.y();
+    out.pose.orientation.z              = orientation.z();
+    out.pose.orientation.w              = orientation.w();
   } else if (viz_frame == "base") {
     const auto &[position, orientation] = transform_pose_wrt_base_frame();
-    out.pose.position.x    = position(0);
-    out.pose.position.y    = position(1);
-    out.pose.position.z    = position(2);
-    out.pose.orientation.x = orientation.x();
-    out.pose.orientation.y = orientation.y();
-    out.pose.orientation.z = orientation.z();
-    out.pose.orientation.w = orientation.w();
-  } else { throw invalid_argument("Invalid visualization frame has been given"); }
+    out.pose.position.x                 = position(0);
+    out.pose.position.y                 = position(1);
+    out.pose.position.z                 = position(2);
+    out.pose.orientation.x              = orientation.x();
+    out.pose.orientation.y              = orientation.y();
+    out.pose.orientation.z              = orientation.z();
+    out.pose.orientation.w              = orientation.w();
+  } else {
+    throw invalid_argument("Invalid visualization frame has been given");
+  }
 }
 
 void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   odomAftMapped.header.frame_id = map_frame;
-  odomAftMapped.header.stamp    = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
+  odomAftMapped.header.stamp =
+      ros::Time().fromSec(lidar_end_time);  // ros::Time().fromSec(lidar_end_time);
   set_posestamp(odomAftMapped.pose, visualization_frame);
   if (visualization_frame == "lidar") {
-    odomAftMapped.child_frame_id  = lidar_frame;
+    odomAftMapped.child_frame_id = lidar_frame;
   } else if (visualization_frame == "base") {
-    odomAftMapped.child_frame_id  = base_frame;
+    odomAftMapped.child_frame_id = base_frame;
   } else if (visualization_frame == "imu") {
-    odomAftMapped.child_frame_id  = imu_frame;
-  } else { throw invalid_argument("Invalid visualization frame has been given"); }
+    odomAftMapped.child_frame_id = imu_frame;
+  } else {
+    throw invalid_argument("Invalid visualization frame has been given");
+  }
   pubOdomAftMapped.publish(odomAftMapped);
-  auto     P                    = kf.get_P();
-  for (int i                    = 0; i < 6; i++) {
-    int k = i < 3 ? i + 3 : i - 3;
+  auto P = kf.get_P();
+  for (int i = 0; i < 6; i++) {
+    int k                                    = i < 3 ? i + 3 : i - 3;
     odomAftMapped.pose.covariance[i * 6 + 0] = P(k, 3);
     odomAftMapped.pose.covariance[i * 6 + 1] = P(k, 4);
     odomAftMapped.pose.covariance[i * 6 + 2] = P(k, 5);
@@ -693,23 +721,18 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   std::ofstream pose_file;
   pose_file.open(output_pose_file, std::ios::app);
   if (pose_file.is_open()) {
-    pose_file << std::fixed << std::setprecision(8)
-              << lidar_end_time << " "
-              << lidar_position(0) << " "
-              << lidar_position(1) << " "
-              << lidar_position(2) << " "
-              << lidar_orientation.x() << " "
-              << lidar_orientation.y() << " "
-              << lidar_orientation.z() << " "
-              << lidar_orientation.w() << std::endl;
+    pose_file << std::fixed << std::setprecision(8) << lidar_end_time << " " << lidar_position(0)
+              << " " << lidar_position(1) << " " << lidar_position(2) << " "
+              << lidar_orientation.x() << " " << lidar_orientation.y() << " "
+              << lidar_orientation.z() << " " << lidar_orientation.w() << std::endl;
     pose_file.close();
   }
 
   static tf::TransformBroadcaster br_imu, br_base, br_lidar;
-  tf::Transform                   transform;
-  tf::Quaternion                  q;
-  transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x, \
-                                  odomAftMapped.pose.pose.position.y, \
+  tf::Transform transform;
+  tf::Quaternion q;
+  transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x,
+                                  odomAftMapped.pose.pose.position.y,
                                   odomAftMapped.pose.pose.position.z));
   q.setW(odomAftMapped.pose.pose.orientation.w);
   q.setX(odomAftMapped.pose.pose.orientation.x);
@@ -721,18 +744,23 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
    * so broadcasting them at the same time breaks down th TF relationship
    ***/
 
-  // br_imu.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, imu_frame));
+  // br_imu.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame,
+  // imu_frame));
 
   // Transformation w.r.t. LiDAR frame
   // transform.setOrigin(tf::Vector3(lidar_position(0), lidar_position(1), lidar_position(2)));
-  // transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(), lidar_orientation.z(), lidar_orientation.w()));
-  // br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, lidar_frame));
+  // transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(),
+  // lidar_orientation.z(), lidar_orientation.w()));
+  // br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame,
+  // lidar_frame));
 
   // Transformation w.r.t. base frame
   const auto &[base_position, base_orientation] = transform_pose_wrt_base_frame();
   transform.setOrigin(tf::Vector3(base_position(0), base_position(1), base_position(2)));
-  transform.setRotation(tf::Quaternion(base_orientation.x(), base_orientation.y(), base_orientation.z(), base_orientation.w()));
-  br_base.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, base_frame));
+  transform.setRotation(tf::Quaternion(
+      base_orientation.x(), base_orientation.y(), base_orientation.z(), base_orientation.w()));
+  br_base.sendTransform(
+      tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, base_frame));
 }
 
 void publish_path(const ros::Publisher pubPath) {
@@ -747,7 +775,6 @@ void publish_path(const ros::Publisher pubPath) {
     path.poses.push_back(msg_body_pose);
     pubPath.publish(path);
   }
-
 }
 
 void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data) {
@@ -780,8 +807,9 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
     if (ekfom_data.converge) {
       /** Find the closest surfaces in the map **/
       ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
-      point_selected_surf[i] =
-        points_near.size() < NUM_MATCH_POINTS ? false : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;
+      point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS        ? false
+                               : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false
+                                                                            : true;
     }
 
     if (!point_selected_surf[i]) continue;
@@ -789,16 +817,17 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
     VF(4) pabcd;
     point_selected_surf[i] = false;
     if (esti_plane(pabcd, points_near, 0.1f)) {
-      float pd2 = pabcd(0) * point_world.x + pabcd(1) * point_world.y + pabcd(2) * point_world.z + pabcd(3);
-      float s   = 1 - 0.9 * fabs(pd2) / sqrt(p_body.norm());
+      float pd2 =
+          pabcd(0) * point_world.x + pabcd(1) * point_world.y + pabcd(2) * point_world.z + pabcd(3);
+      float s = 1 - 0.9 * fabs(pd2) / sqrt(p_body.norm());
 
       if (s > 0.9) {
-        point_selected_surf[i] = true;
+        point_selected_surf[i]       = true;
         normvec->points[i].x         = pabcd(0);
         normvec->points[i].y         = pabcd(1);
         normvec->points[i].z         = pabcd(2);
         normvec->points[i].intensity = pd2;
-        res_last[i] = abs(pd2);
+        res_last[i]                  = abs(pd2);
       }
     }
   }
@@ -825,13 +854,13 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
   double solve_start_ = omp_get_wtime();
 
   /*** Computation of Measuremnt Jacobian matrix H and measurents vector ***/
-  ekfom_data.h_x = MatrixXd::Zero(effct_feat_num, 12); //23
+  ekfom_data.h_x = MatrixXd::Zero(effct_feat_num, 12);  // 23
   ekfom_data.h.resize(effct_feat_num);
 
   for (int i = 0; i < effct_feat_num; i++) {
     const PointType &laser_p = laserCloudOri->points[i];
-    V3D             point_this_be(laser_p.x, laser_p.y, laser_p.z);
-    M3D             point_be_crossmat;
+    V3D point_this_be(laser_p.x, laser_p.y, laser_p.z);
+    M3D point_be_crossmat;
     point_be_crossmat << SKEW_SYM_MATRX(point_this_be);
     V3D point_this = s.offset_R_L_I * point_this_be + s.offset_T_L_I;
     M3D point_crossmat;
@@ -839,18 +868,18 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
 
     /*** get the normal vector of closest surface/corner ***/
     const PointType &norm_p = corr_normvect->points[i];
-    V3D             norm_vec(norm_p.x, norm_p.y, norm_p.z);
+    V3D norm_vec(norm_p.x, norm_p.y, norm_p.z);
 
     /*** calculate the Measuremnt Jacobian matrix H ***/
     V3D C(s.rot.conjugate() * norm_vec);
     V3D A(point_crossmat * C);
     if (extrinsic_est_en) {
-      V3D B(point_be_crossmat * s.offset_R_L_I.conjugate() * C); //s.rot.conjugate()*norm_vec);
-      ekfom_data.h_x.block<1, 12>(i, 0)
-        << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B), VEC_FROM_ARRAY(C);
+      V3D B(point_be_crossmat * s.offset_R_L_I.conjugate() * C);  // s.rot.conjugate()*norm_vec);
+      ekfom_data.h_x.block<1, 12>(i, 0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A),
+          VEC_FROM_ARRAY(B), VEC_FROM_ARRAY(C);
     } else {
-      ekfom_data.h_x.block<1, 12>(i, 0)
-        << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+      ekfom_data.h_x.block<1, 12>(i, 0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0;
     }
 
     /*** Measuremnt: distance to the closest surface/corner ***/
@@ -907,7 +936,9 @@ int main(int argc, char **argv) {
   nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
   nh.param<double>("adaptive/filter_size_map_smaller", filter_size_map_smaller, 0.2);
   nh.param<int>("adaptive/num_thr_adaptive_voxelization", num_thr_adaptive_voxelization, 700);
-  nh.param<int>("adaptive/num_thr_adaptive_voxelization_neighbor", num_thr_adaptive_voxelization_neighbor, 500);
+  nh.param<int>("adaptive/num_thr_adaptive_voxelization_neighbor",
+                num_thr_adaptive_voxelization_neighbor,
+                500);
   nh.param<bool>("adaptive/adaptive_voxelization_en", adaptive_voxelization_en, false);
   nh.param<double>("adaptive/neighbor_xy_thres", neighbor_xy_thres, 5.0);
   std::cout << "p_pre->lidar_type " << p_pre->lidar_type << std::endl;
@@ -917,13 +948,15 @@ int main(int argc, char **argv) {
 
   std::cout << "\033[1;34mLiDAR topic: " << lid_topic << "\033[0m" << std::endl;
   std::cout << "\033[1;34mIMU topic: " << imu_topic << "\033[0m" << std::endl;
-  std::cout << "\033[1;32mextrinT of " << robot_name << ": " << extrinT[0] << " " << extrinT[1] << " " << extrinT[2]
-            << "\033[0m" << std::endl;
+  std::cout << "\033[1;32mextrinT of " << robot_name << ": " << extrinT[0] << " " << extrinT[1]
+            << " " << extrinT[2] << "\033[0m" << std::endl;
   std::string space(robot_name.length() + 13, ' ');
-  std::cout << "\033[1;32mextrinR of " << robot_name << ": " << extrinR[0] << " " << extrinR[1] << " " << extrinR[2] << "\n";
+  std::cout << "\033[1;32mextrinR of " << robot_name << ": " << extrinR[0] << " " << extrinR[1]
+            << " " << extrinR[2] << "\n";
   std::cout << space << extrinR[3] << " " << extrinR[4] << " " << extrinR[5] << "\n";
   std::cout << space << extrinR[6] << " " << extrinR[7] << " " << extrinR[8] << "\n\033[0m";
-  std::cout << "\033[1;32mNote, those variables should be set in the yaml file by manual!" << "\n\033[0m";
+  std::cout << "\033[1;32mNote, those variables should be set in the yaml file by manual!"
+            << "\n\033[0m";
 
   // Flush
   std::string prefix = save_dir + "/" + sequence_name;
@@ -952,17 +985,21 @@ int main(int argc, char **argv) {
   }
 
   tf::TransformListener listener;
-  tf::StampedTransform  transform;
+  tf::StampedTransform transform;
 
   vector<double> extrinT_Lidar_wrt_Base(3, 0.0);
   vector<double> extrinR_Lidar_wrt_Base(9, 0.0);
 
   /**
-   * Currently, some Kimera-Multi bags have no tfs, so only support it in the case robots are from the DCIST project
+   * Currently, some Kimera-Multi bags have no tfs, so only support it in the case robots are from
+   * the DCIST project
    */
 
-  bool is_dcist = robot_name == "hamilton" || robot_name == "acl_jackal" || robot_name == "acl_jackal2" || robot_name == "apis" \
-                || robot_name == "hydra_multi_sparkal1" || robot_name == "sparkal1" || robot_name == "sparkal2" || robot_name == "hathor" || robot_name == "thoth" || robot_name == "sobek";
+  bool is_dcist = robot_name == "hamilton" || robot_name == "acl_jackal" ||
+                  robot_name == "acl_jackal2" || robot_name == "apis" ||
+                  robot_name == "hydra_multi_sparkal1" || robot_name == "sparkal1" ||
+                  robot_name == "sparkal2" || robot_name == "hathor" || robot_name == "thoth" ||
+                  robot_name == "sobek";
   if (is_dcist) {
     try {
       std::cout << base_frame << "  " << lidar_frame << std::endl;
@@ -981,7 +1018,7 @@ int main(int argc, char **argv) {
 
       // Rotation (Matrix)
       tf::Matrix3x3 m(transform.getRotation());
-      for (int      i = 0; i < 3; ++i) {
+      for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
           extrinR_Lidar_wrt_Base[i * 3 + j] = m[i][j];
         }
@@ -1000,7 +1037,6 @@ int main(int argc, char **argv) {
                roll * 180.0 / M_PI,
                pitch * 180.0 / M_PI,
                yaw * 180.0 / M_PI);
-
     } catch (tf::TransformException &ex) {
       ROS_ERROR("%s", ex.what());
     }
@@ -1012,20 +1048,21 @@ int main(int argc, char **argv) {
   }
 
   /*** variables definition ***/
-  int    effect_feat_num                 = 0, frame_num = 0;
-  double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
-         aver_time_solve                 = 0, aver_time_const_H_time = 0;
-  bool   flg_EKF_converged, EKF_stop_flg = 0;
+  int effect_feat_num = 0, frame_num = 0;
+  double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0,
+                         aver_time_incre = 0, aver_time_solve = 0, aver_time_const_H_time = 0;
+  bool flg_EKF_converged, EKF_stop_flg = 0;
 
   FOV_DEG      = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0);
-  HALF_FOV_COS = cos((FOV_DEG) * 0.5 * PI_M / 180.0);
+  HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0);
 
   _featsArray.reset(new PointCloudXYZI());
 
   memset(point_selected_surf, true, sizeof(point_selected_surf));
   memset(res_last, -1000.0f, sizeof(res_last));
   downSizeFilterSurf.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
-  downSizeFilterSurfAdaptive.setLeafSize(filter_size_map_smaller, filter_size_map_smaller, filter_size_map_smaller);
+  downSizeFilterSurfAdaptive.setLeafSize(
+      filter_size_map_smaller, filter_size_map_smaller, filter_size_map_smaller);
   memset(point_selected_surf, true, sizeof(point_selected_surf));
   memset(res_last, -1000.0f, sizeof(res_last));
 
@@ -1044,9 +1081,9 @@ int main(int argc, char **argv) {
   kf.init_dyn_share(get_f, df_dx, df_dw, h_share_model, NUM_MAX_ITERATIONS, epsi);
 
   /*** debug record ***/
-  FILE   *fp;
+  FILE *fp;
   string pos_log_dir = root_dir + "/Log/pos_log.txt";
-  fp = fopen(pos_log_dir.c_str(), "w");
+  fp                 = fopen(pos_log_dir.c_str(), "w");
 
   ofstream fout_pre, fout_out;
   fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"), ios::out);
@@ -1057,34 +1094,33 @@ int main(int argc, char **argv) {
     cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
 
   /*** ROS subscribe initialization ***/
-  ros::Subscriber sub_pcl                = p_pre->lidar_type == AVIA ? \
-        nh.subscribe(lid_topic, 200000, livox_pcl_cbk) : \
-        nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
-  ros::Subscriber sub_imu                = nh.subscribe(imu_topic, 200000, imu_cbk);
-  ros::Publisher  pubLaserCloudFull      = nh.advertise<sensor_msgs::PointCloud2>
-    ("/" + robot_name + "/locus/cloud_registered", 100000);
-  ros::Publisher  pubLaserCloudFull_lidar = nh.advertise<sensor_msgs::PointCloud2>
-    ("/" + robot_name + "/locus/cloud_registered_lidar", 100000);
-  ros::Publisher  pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>
-    ("/" + robot_name + "/locus/cloud_registered_body", 100000);
-  ros::Publisher  pubLaserCloudFull_base = nh.advertise<sensor_msgs::PointCloud2>
-    ("/" + robot_name + "/locus/cloud_registered_base", 100000);
-  ros::Publisher  pubOdomAftMapped       = nh.advertise<nav_msgs::Odometry>
-    ("/" + robot_name + "/locus/odometry", 100000);
-  ros::Publisher  pubPath                = nh.advertise<nav_msgs::Path>
-    ("/" + robot_name + "/locus/path", 100000);
-//------------------------------------------------------------------------------------------------------
+  ros::Subscriber sub_pcl = p_pre->lidar_type == AVIA
+                                ? nh.subscribe(lid_topic, 200000, livox_pcl_cbk)
+                                : nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
+  ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
+  ros::Publisher pubLaserCloudFull =
+      nh.advertise<sensor_msgs::PointCloud2>("/" + robot_name + "/locus/cloud_registered", 100000);
+  ros::Publisher pubLaserCloudFull_lidar = nh.advertise<sensor_msgs::PointCloud2>(
+      "/" + robot_name + "/locus/cloud_registered_lidar", 100000);
+  ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>(
+      "/" + robot_name + "/locus/cloud_registered_body", 100000);
+  ros::Publisher pubLaserCloudFull_base = nh.advertise<sensor_msgs::PointCloud2>(
+      "/" + robot_name + "/locus/cloud_registered_base", 100000);
+  ros::Publisher pubOdomAftMapped =
+      nh.advertise<nav_msgs::Odometry>("/" + robot_name + "/locus/odometry", 100000);
+  ros::Publisher pubPath = nh.advertise<nav_msgs::Path>("/" + robot_name + "/locus/path", 100000);
+  //------------------------------------------------------------------------------------------------------
   signal(SIGINT, SigHandle);
   ros::Rate rate(5000);
-  bool      status = ros::ok();
+  bool status = ros::ok();
   while (status) {
     if (flg_exit) break;
     ros::spinOnce();
     if (sync_packages(Measures, false)) {
       if (flg_first_scan) {
-        first_lidar_time = Measures.lidar_beg_time;
+        first_lidar_time        = Measures.lidar_beg_time;
         p_imu->first_lidar_time = first_lidar_time;
-        flg_first_scan = false;
+        flg_first_scan          = false;
         continue;
       }
 
@@ -1109,7 +1145,7 @@ int main(int argc, char **argv) {
         if (i % point_filter_num != 0) continue;
         feats_undistort->points.emplace_back(pt);
       }
-      
+
       state_point = kf.get_x();
       pos_lid     = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
@@ -1118,8 +1154,7 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? \
-                            false : true;
+      flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true;
       /*** Segment the map in lidar FOV ***/
       lasermap_fov_segment();
 
@@ -1136,11 +1171,13 @@ int main(int argc, char **argv) {
           // Small tick means degeneracy occurs recently!
           degeneracy_tick = 0;
         }
-        cout << "[ AdaVox ]: In num: " << feats_undistort->points.size() << " downsamp: " << feats_down_size;
+        cout << "[ AdaVox ]: In num: " << feats_undistort->points.size()
+             << " downsamp: " << feats_down_size;
         cout << " (" << feats_down_size_neighbor << ")" << endl;
 
         if (degeneracy_tick < degeneracy_tick_criteria) {
-          cout << "\033[1;31m[ AdaVox ] " << feats_down_size << " < " << num_thr_adaptive_voxelization << " ==> ";
+          cout << "\033[1;31m[ AdaVox ] " << feats_down_size << " < "
+               << num_thr_adaptive_voxelization << " ==> ";
 
           PointCloudXYZI::Ptr tmp_down_body(new PointCloudXYZI());
           downSizeFilterSurfAdaptive.setInputCloud(feats_undistort);
@@ -1149,7 +1186,7 @@ int main(int argc, char **argv) {
           if (tmp_down_body->points.size() < feats_undistort->points.size()) {
             cout << "\033[1;31m So, " << feats_down_size << " --> " << tmp_down_body->points.size();
             *feats_down_body = *tmp_down_body;
-            feats_down_size = feats_down_body->points.size();
+            feats_down_size  = feats_down_body->points.size();
           } else {
             cout << " But due to the overflow, re-voxelization is not performed!";
           }
@@ -1157,9 +1194,8 @@ int main(int argc, char **argv) {
         }
       }
 
-      degeneracy_tick        = min(degeneracy_tick + 1, 100000);
+      degeneracy_tick = min(degeneracy_tick + 1, 100000);
       /*****************************/
-
 
       /*** initialize the map kdtree ***/
       if (ikdtree.Root_Node == nullptr) {
@@ -1173,10 +1209,10 @@ int main(int argc, char **argv) {
         }
         continue;
       }
-      int    featsFromMapNum = ikdtree.validnum();
-      kdtree_size_st = ikdtree.size();
+      int featsFromMapNum = ikdtree.validnum();
+      kdtree_size_st      = ikdtree.size();
 
-//      cout << "effect num:" << effct_feat_num << endl;
+      //      cout << "effect num:" << effct_feat_num << endl;
 
       /*** ICP and iterated Kalman filter update ***/
       if (feats_down_size < 5) {
@@ -1188,13 +1224,14 @@ int main(int argc, char **argv) {
       feats_down_world->resize(feats_down_size);
 
       V3D ext_euler = SO3ToEuler(state_point.offset_R_L_I);
-      fout_pre << setw(20) << Measures.lidar_beg_time - first_lidar_time << " " << euler_cur.transpose() << " "
-               << state_point.pos.transpose() << " " << ext_euler.transpose() << " "
-               << state_point.offset_T_L_I.transpose() << " " << state_point.vel.transpose() \
- << " " << state_point.bg.transpose() << " " << state_point.ba.transpose() << " " << state_point.grav << endl;
+      fout_pre << setw(20) << Measures.lidar_beg_time - first_lidar_time << " "
+               << euler_cur.transpose() << " " << state_point.pos.transpose() << " "
+               << ext_euler.transpose() << " " << state_point.offset_T_L_I.transpose() << " "
+               << state_point.vel.transpose() << " " << state_point.bg.transpose() << " "
+               << state_point.ba.transpose() << " " << state_point.grav << endl;
 
-      if (0) // If you need to see map point, change to "if(1)"
-      {
+      // If you need to see map point, change to "if(1)"
+      if (0) {
         PointVector().swap(ikdtree.PCL_Storage);
         ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);
         featsFromMap->clear();
@@ -1203,8 +1240,8 @@ int main(int argc, char **argv) {
 
       pointSearchInd_surf.resize(feats_down_size);
       Nearest_Points.resize(feats_down_size);
-      int  rematch_num       = 0;
-      bool nearest_search_en = true; //
+      int rematch_num        = 0;
+      bool nearest_search_en = true;  //
 
       t2 = omp_get_wtime();
 
@@ -1215,10 +1252,10 @@ int main(int argc, char **argv) {
       state_point = kf.get_x();
       euler_cur   = SO3ToEuler(state_point.rot);
       pos_lid     = state_point.pos + state_point.rot * state_point.offset_T_L_I;
-      geoQuat.x = state_point.rot.coeffs()[0];
-      geoQuat.y = state_point.rot.coeffs()[1];
-      geoQuat.z = state_point.rot.coeffs()[2];
-      geoQuat.w = state_point.rot.coeffs()[3];
+      geoQuat.x   = state_point.rot.coeffs()[0];
+      geoQuat.y   = state_point.rot.coeffs()[1];
+      geoQuat.z   = state_point.rot.coeffs()[2];
+      geoQuat.w   = state_point.rot.coeffs()[3];
 
       double t_update_end = omp_get_wtime();
 
@@ -1235,20 +1272,23 @@ int main(int argc, char **argv) {
       if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFull);
       if (scan_pub_en && scan_lidar_pub_en) publish_frame(pubLaserCloudFull_lidar, "lidar");
       if (scan_pub_en && scan_body_pub_en) publish_frame(pubLaserCloudFull_body, "imu");
-      if (scan_pub_en && scan_base_pub_en && is_dcist) publish_frame(pubLaserCloudFull_base, "base");
+      if (scan_pub_en && scan_base_pub_en && is_dcist)
+        publish_frame(pubLaserCloudFull_base, "base");
 
       /*** Debug variables ***/
       if (runtime_pos_log) {
         frame_num++;
-        kdtree_size_end        = ikdtree.size();
-        aver_time_consu        = aver_time_consu * (frame_num - 1) / frame_num + (t5 - t0) / frame_num;
-        aver_time_icp          =
-          aver_time_icp * (frame_num - 1) / frame_num + (t_update_end - t_update_start) / frame_num;
-        aver_time_match        = aver_time_match * (frame_num - 1) / frame_num + (match_time) / frame_num;
-        aver_time_incre        = aver_time_incre * (frame_num - 1) / frame_num + (kdtree_incremental_time) / frame_num;
-        aver_time_solve        =
-          aver_time_solve * (frame_num - 1) / frame_num + (solve_time + solve_H_time) / frame_num;
-        aver_time_const_H_time = aver_time_const_H_time * (frame_num - 1) / frame_num + solve_time / frame_num;
+        kdtree_size_end = ikdtree.size();
+        aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num + (t5 - t0) / frame_num;
+        aver_time_icp   = aver_time_icp * (frame_num - 1) / frame_num +
+                        (t_update_end - t_update_start) / frame_num;
+        aver_time_match = aver_time_match * (frame_num - 1) / frame_num + (match_time) / frame_num;
+        aver_time_incre =
+            aver_time_incre * (frame_num - 1) / frame_num + (kdtree_incremental_time) / frame_num;
+        aver_time_solve =
+            aver_time_solve * (frame_num - 1) / frame_num + (solve_time + solve_H_time) / frame_num;
+        aver_time_const_H_time =
+            aver_time_const_H_time * (frame_num - 1) / frame_num + solve_time / frame_num;
         T1[time_log_counter]       = Measures.lidar_beg_time;
         s_plot[time_log_counter]   = t5 - t0;
         s_plot2[time_log_counter]  = feats_undistort->points.size();
@@ -1262,20 +1302,23 @@ int main(int argc, char **argv) {
         s_plot10[time_log_counter] = add_point_size;
         time_log_counter++;
         printf(
-          "[ mapping ]: time: IMU + Map + Input Downsample: %0.6f ave match: %0.6f ave solve: %0.6f  ave ICP: %0.6f  map incre: %0.6f ave total: %0.6f icp: %0.6f construct H: %0.6f \n",
-          t1 - t0,
-          aver_time_match,
-          aver_time_solve,
-          t3 - t1,
-          t5 - t3,
-          aver_time_consu,
-          aver_time_icp,
-          aver_time_const_H_time);
+            "[ mapping ]: time: IMU + Map + Input Downsample: %0.6f ave match: %0.6f ave solve: "
+            "%0.6f  ave ICP: %0.6f  map incre: %0.6f ave total: %0.6f icp: %0.6f construct H: "
+            "%0.6f \n",
+            t1 - t0,
+            aver_time_match,
+            aver_time_solve,
+            t3 - t1,
+            t5 - t3,
+            aver_time_consu,
+            aver_time_icp,
+            aver_time_const_H_time);
         ext_euler = SO3ToEuler(state_point.offset_R_L_I);
-        fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " " << euler_cur.transpose() << " "
-                 << state_point.pos.transpose() << " " << ext_euler.transpose() << " "
-                 << state_point.offset_T_L_I.transpose() << " " << state_point.vel.transpose() \
- << " " << state_point.bg.transpose() << " " << state_point.ba.transpose() << " " << state_point.grav << " "
+        fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " "
+                 << euler_cur.transpose() << " " << state_point.pos.transpose() << " "
+                 << ext_euler.transpose() << " " << state_point.offset_T_L_I.transpose() << " "
+                 << state_point.vel.transpose() << " " << state_point.bg.transpose() << " "
+                 << state_point.ba.transpose() << " " << state_point.grav << " "
                  << feats_undistort->points.size() << endl;
         dump_lio_state_to_log(fp);
       }
@@ -1289,8 +1332,8 @@ int main(int argc, char **argv) {
   /* 1. make sure you have enough memories
   /* 2. pcd save will largely influence the real-time performences **/
   if (pcl_wait_save->size() > 0 && pcd_save_en) {
-    string         file_name = string("scans.pcd");
-    string         all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
+    string file_name = string("scans.pcd");
+    string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
     pcl::PCDWriter pcd_writer;
     cout << "current scan saved to /PCD/" << file_name << endl;
     pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
@@ -1301,24 +1344,25 @@ int main(int argc, char **argv) {
 
   if (runtime_pos_log) {
     vector<double> t, s_vec, s_vec2, s_vec3, s_vec4, s_vec5, s_vec6, s_vec7;
-    FILE           *fp2;
-    string         log_dir = root_dir + "/Log/fast_lio_time_log.csv";
-    fp2 = fopen(log_dir.c_str(), "w");
+    FILE *fp2;
+    string log_dir = root_dir + "/Log/fast_lio_time_log.csv";
+    fp2            = fopen(log_dir.c_str(), "w");
     fprintf(fp2,
-            "time_stamp, total time, scan point size, incremental time, search time, delete size, delete time, tree size st, tree size end, add point size, preprocess time\n");
+            "time_stamp, total time, scan point size, incremental time, search time, delete size, "
+            "delete time, tree size st, tree size end, add point size, preprocess time\n");
     for (int i = 0; i < time_log_counter; i++) {
       fprintf(fp2,
               "%0.8f,%0.8f,%d,%0.8f,%0.8f,%d,%0.8f,%d,%d,%d,%0.8f\n",
               T1[i],
               s_plot[i],
-              int(s_plot2[i]),
+              static_cast<int>(s_plot2[i]),
               s_plot3[i],
               s_plot4[i],
-              int(s_plot5[i]),
+              static_cast<int>(s_plot5[i]),
               s_plot6[i],
-              int(s_plot7[i]),
-              int(s_plot8[i]),
-              int(s_plot10[i]),
+              static_cast<int>(s_plot7[i]),
+              static_cast<int>(s_plot8[i]),
+              static_cast<int>(s_plot10[i]),
               s_plot11[i]);
       t.push_back(T1[i]);
       s_vec.push_back(s_plot9[i]);
