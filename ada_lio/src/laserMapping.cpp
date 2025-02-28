@@ -555,12 +555,12 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
   /* 1. make sure you have enough memories
   /* 2. noted that pcd save will influence the real-time performences **/
   if (pcd_save_en) {
-    int                 size = feats_undistort->points.size();
+    int                 size = cloud_undistort->points.size();
     PointCloudXYZI::Ptr laserCloudWorld(\
                         new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
-      pclPointBodyToWorld(&feats_undistort->points[i], \
+      pclPointBodyToWorld(&cloud_undistort->points[i], \
                                 &laserCloudWorld->points[i]);
     }
     *pcl_wait_save += *laserCloudWorld;
@@ -868,7 +868,7 @@ int main(int argc, char **argv) {
   nh.param<bool>("publish/dense_publish_en", dense_pub_en, true);
   nh.param<bool>("publish/scan_lidarframe_pub_en", scan_lidar_pub_en, true);
   nh.param<bool>("publish/scan_bodyframe_pub_en", scan_body_pub_en, true);
-  nh.param<bool>("publish/scan_baseframe_pub_en", scan_body_pub_en, true);
+  nh.param<bool>("publish/scan_baseframe_pub_en", scan_base_pub_en, true);
   nh.param<int>("max_iteration", NUM_MAX_ITERATIONS, 4);
   nh.param<string>("map_file_path", map_file_path, "");
   nh.param<string>("common/save_dir", save_dir, "");
@@ -896,7 +896,7 @@ int main(int argc, char **argv) {
   nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
   nh.param<int>("preprocess/timestamp_unit", p_pre->time_unit, US);
   nh.param<int>("preprocess/scan_rate", p_pre->SCAN_RATE, 10);
-  nh.param<int>("preprocess/point_filter_num", p_pre->point_filter_num, 1);
+  nh.param<int>("point_filter_num_for_preprocessing", p_pre->point_filter_num, 1);
   nh.param<int>("point_filter_num", point_filter_num, 4);
   nh.param<bool>("feature_extract_enable", p_pre->feature_enabled, false);
   nh.param<bool>("runtime_pos_log_enable", runtime_pos_log, 0);
@@ -910,7 +910,7 @@ int main(int argc, char **argv) {
   nh.param<int>("adaptive/num_thr_adaptive_voxelization_neighbor", num_thr_adaptive_voxelization_neighbor, 500);
   nh.param<bool>("adaptive/adaptive_voxelization_en", adaptive_voxelization_en, false);
   nh.param<double>("adaptive/neighbor_xy_thres", neighbor_xy_thres, 5.0);
-  cout << "p_pre->lidar_type " << p_pre->lidar_type << endl;
+  std::cout << "p_pre->lidar_type " << p_pre->lidar_type << std::endl;
 
   path.header.stamp    = ros::Time::now();
   path.header.frame_id = map_frame;
@@ -1097,7 +1097,9 @@ int main(int argc, char **argv) {
       svd_time           = 0;
       t0                 = omp_get_wtime();
 
-      // NOTE(hyungtae) Place resampling outside `Process` function to get full cloud point, i.e., `cloud_undistort`
+      // NOTE(hlim): Place resampling outside `Process` function to get full cloud point,
+      // i.e., `cloud_undistort`: raw undistorted cloud points
+      // & `feats_undistort`: Undistorted cloud points for pose estimation module
       cloud_undistort->clear();
       feats_undistort->clear();
       p_imu->Process(Measures, kf, cloud_undistort);
@@ -1107,7 +1109,6 @@ int main(int argc, char **argv) {
         if (i % point_filter_num != 0) continue;
         feats_undistort->points.emplace_back(pt);
       }
-      // std::cout << Measures.lidar->size() << " vs " << cloud_undistort->size() <<  " vs " << feats_undistort->size() << std::endl;
       
       state_point = kf.get_x();
       pos_lid     = state_point.pos + state_point.rot * state_point.offset_T_L_I;
