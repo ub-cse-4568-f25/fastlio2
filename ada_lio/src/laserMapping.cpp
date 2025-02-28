@@ -530,16 +530,14 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
     int                 size = laserCloudFullRes->points.size();
     PointCloudXYZI::Ptr laserCloudWorld(\
                         new PointCloudXYZI(size, 1));
-
+    PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
     for (int i = 0; i < size; i++) {
       if (visualization_frame == "imu") {
         pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
       } else if (visualization_frame == "lidar") {
-        PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
         pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudTmp->points[i]);
         pclPointIMUToLiDAR(&laserCloudTmp->points[i], &laserCloudWorld->points[i]);
       } else if (visualization_frame == "base") {
-        PointCloudXYZI::Ptr laserCloudTmp(new PointCloudXYZI(size, 1));
         pclPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudTmp->points[i]);
         pclPointIMUToBase(&laserCloudTmp->points[i], &laserCloudWorld->points[i]);
       } else { throw invalid_argument("Invalid visualization frame has been given"); }
