@@ -1,12 +1,13 @@
 #include <string>
 #include <vector>
 
-#include <livox_ros_driver/CustomMsg.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 
-using namespace std;
+#if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
+#include <livox_ros_driver/CustomMsg.h>
+#endif
 
 #define IS_VALID(a) ((abs(a) > 1e8) ? true : false)
 
@@ -48,7 +49,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(
     velodyne_ros::Point,
     (float, x, x)(float, y, y)(float, z, z)(float,
                                             intensity,
-                                            intensity)(float, time, time)(uint16_t, ring, ring))
+                                            intensity)(float, time, time)(std::uint16_t, ring, ring))
 
 namespace ouster_ros {
 struct EIGEN_ALIGN16 Point {
@@ -84,14 +85,16 @@ class Preprocess {
   Preprocess();
   ~Preprocess();
 
+#if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
   void process(const livox_ros_driver::CustomMsg::ConstPtr &msg, PointCloudXYZI::Ptr &pcl_out);
+#endif
   void process(const sensor_msgs::PointCloud2::ConstPtr &msg, PointCloudXYZI::Ptr &pcl_out);
   void set(bool feat_en, int lid_type, double bld, int pfilt_num);
 
   // sensor_msgs::PointCloud2::ConstPtr pointcloud;
   PointCloudXYZI  pl_full, pl_corn, pl_surf, pl_from_pilots;
   PointCloudXYZI  pl_buff[128];   // maximum 128 line lidar
-  vector<orgtype> typess[128];    // maximum 128 line lidar
+  std::vector<orgtype> typess[128];    // maximum 128 line lidar
   float           time_unit_scale;
   int             lidar_type, point_filter_num, N_SCANS, SCAN_RATE, time_unit;
   double          blind, blind_for_human_pilots;
@@ -100,19 +103,21 @@ class Preprocess {
 
  private:
   bool is_from_pilot_zone(const float &pt_x, const float &pt_y, const float &pt_z, const std::string mode = "velodyne");
+#if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
   void avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg);
+#endif
   void oust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
   void kmoust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
   void velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
-  void give_feature(PointCloudXYZI &pl, vector<orgtype> &types);
+  void give_feature(PointCloudXYZI &pl, std::vector<orgtype> &types);
   void pub_func(PointCloudXYZI &pl, const ros::Time &ct);
-  int plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, uint i, uint &i_nex, Eigen::Vector3d &curr_direct);
+  int plane_judge(const PointCloudXYZI &pl, std::vector<orgtype> &types, uint i, uint &i_nex, Eigen::Vector3d &curr_direct);
   bool small_plane(const PointCloudXYZI &pl,
-                   vector<orgtype> &types,
+                   std::vector<orgtype> &types,
                    uint i_cur,
                    uint &i_nex,
                    Eigen::Vector3d &curr_direct);
-  bool edge_jump_judge(const PointCloudXYZI &pl, vector<orgtype> &types, uint i, Surround nor_dir);
+  bool edge_jump_judge(const PointCloudXYZI &pl, std::vector<orgtype> &types, uint i, Surround nor_dir);
 
   int    group_size;
   double disA, disB, inf_bound;

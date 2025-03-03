@@ -1692,7 +1692,6 @@ class esekf {
            it != x_.SO3_state.end();
            it++) {
         int idx = (*it).first;
-        int dim = (*it).second;
         for (int i = 0; i < 3; i++) {
           seg_SO3(i) = dx(idx + i);
         }
@@ -1714,7 +1713,6 @@ class esekf {
            it != x_.S2_state.end();
            it++) {
         int idx = (*it).first;
-        int dim = (*it).second;
         for (int i = 0; i < 2; i++) {
           seg_S2(i) = dx(idx + i);
         }

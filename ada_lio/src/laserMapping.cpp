@@ -41,9 +41,7 @@
 #include <thread>
 
 #include <Eigen/Core>
-#include <Python.h>
 #include <geometry_msgs/Vector3.h>
-#include <livox_ros_driver/CustomMsg.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <omp.h>
@@ -60,9 +58,13 @@
 #include <tf/transform_listener.h>
 #include <visualization_msgs/Marker.h>
 
-#include "./IMU_Processing.hpp"
-#include "./ikd_Tree.h"
-#include "./preprocess.h"
+#include "IMU_Processing.hpp"
+#include "ikd_Tree.h"
+#include "preprocess.h"
+
+#if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
+#include <livox_ros_driver/CustomMsg.h>
+#endif
 
 #define INIT_TIME (0.1)
 #define LASER_POINT_COV (0.001)
@@ -220,7 +222,7 @@ void pointBodyToWorld(PointType const *const pi, PointType *const po) {
 }
 
 template <typename T>
-void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po) {
+void pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi, Eigen::Matrix<T, 3, 1> &po) {
   V3D p_body(pi[0], pi[1], pi[2]);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) +
                state_point.pos);
@@ -363,6 +365,8 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
 
 double timediff_lidar_wrt_imu = 0.0;
 bool timediff_set_flg         = false;
+
+#if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
 void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
   mtx_buffer.lock();
   double preprocess_start_time = omp_get_wtime();
@@ -396,6 +400,7 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
   mtx_buffer.unlock();
   sig_buffer.notify_all();
 }
+#endif
 
 void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
   publish_count++;
@@ -504,7 +509,6 @@ void map_incremental() {
     if (!Nearest_Points[i].empty() && flg_EKF_inited) {
       const PointVector &points_near = Nearest_Points[i];
       bool need_add                  = true;
-      BoxPointType Box_of_Point;
       PointType downsample_result, mid_point;
       mid_point.x =
           floor(feats_down_world->points[i].x / filter_size_map_min) * filter_size_map_min +
@@ -573,7 +577,7 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
 
   /**************** save map ****************/
   /* 1. make sure you have enough memories
-  /* 2. noted that pcd save will influence the real-time performences **/
+   * 2. noted that pcd save will influence the real-time performences **/
   if (pcd_save_en) {
     int size = cloud_undistort->points.size();
     PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
@@ -854,7 +858,7 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
   double solve_start_ = omp_get_wtime();
 
   /*** Computation of Measuremnt Jacobian matrix H and measurents vector ***/
-  ekfom_data.h_x = MatrixXd::Zero(effct_feat_num, 12);  // 23
+  ekfom_data.h_x = Eigen::MatrixXd::Zero(effct_feat_num, 12);  // 23
   ekfom_data.h.resize(effct_feat_num);
 
   for (int i = 0; i < effct_feat_num; i++) {
@@ -1048,10 +1052,9 @@ int main(int argc, char **argv) {
   }
 
   /*** variables definition ***/
-  int effect_feat_num = 0, frame_num = 0;
-  double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0,
+  int frame_num = 0;
+  double aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0,
                          aver_time_incre = 0, aver_time_solve = 0, aver_time_const_H_time = 0;
-  bool flg_EKF_converged, EKF_stop_flg = 0;
 
   FOV_DEG      = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0);
   HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0);
@@ -1094,9 +1097,18 @@ int main(int argc, char **argv) {
     cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
 
   /*** ROS subscribe initialization ***/
-  ros::Subscriber sub_pcl = p_pre->lidar_type == AVIA
-                                ? nh.subscribe(lid_topic, 200000, livox_pcl_cbk)
-                                : nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
+  ros::Subscriber sub_pcl;
+  if (p_pre->lidar_type != AVIA) {
+    sub_pcl = nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
+  } else {
+#if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
+    sub_pcl = nh.subscribe(lid_topic, 200000, livox_pcl_cbk);
+#else
+    ROS_FATAL("Not built with livox_ros_driver! Unable to suscribe to AVIA lidar");
+    return 1;
+#endif
+  }
+
   ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
   ros::Publisher pubLaserCloudFull =
       nh.advertise<sensor_msgs::PointCloud2>("/" + robot_name + "/locus/cloud_registered", 100000);
@@ -1124,13 +1136,12 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      double t0, t1, t2, t3, t4, t5, match_start, solve_start, svd_time;
+      double t0, t1, t3, t5;
 
       match_time         = 0;
       kdtree_search_time = 0.0;
       solve_time         = 0;
       solve_const_H_time = 0;
-      svd_time           = 0;
       t0                 = omp_get_wtime();
 
       // NOTE(hlim): Place resampling outside `Process` function to get full cloud point,
@@ -1140,7 +1151,7 @@ int main(int argc, char **argv) {
       feats_undistort->clear();
       p_imu->Process(Measures, kf, cloud_undistort);
       feats_undistort->reserve(cloud_undistort->size() / point_filter_num);
-      for (int i = 0; i < cloud_undistort->points.size(); ++i) {
+      for (size_t i = 0; i < cloud_undistort->points.size(); ++i) {
         const auto &pt = cloud_undistort->points[i];
         if (i % point_filter_num != 0) continue;
         feats_undistort->points.emplace_back(pt);
@@ -1209,7 +1220,6 @@ int main(int argc, char **argv) {
         }
         continue;
       }
-      int featsFromMapNum = ikdtree.validnum();
       kdtree_size_st      = ikdtree.size();
 
       //      cout << "effect num:" << effct_feat_num << endl;
@@ -1240,10 +1250,6 @@ int main(int argc, char **argv) {
 
       pointSearchInd_surf.resize(feats_down_size);
       Nearest_Points.resize(feats_down_size);
-      int rematch_num        = 0;
-      bool nearest_search_en = true;  //
-
-      t2 = omp_get_wtime();
 
       /*** iterated state estimation ***/
       double t_update_start = omp_get_wtime();
@@ -1330,7 +1336,7 @@ int main(int argc, char **argv) {
 
   /**************** save map ****************/
   /* 1. make sure you have enough memories
-  /* 2. pcd save will largely influence the real-time performences **/
+   * 2. pcd save will largely influence the real-time performences **/
   if (pcl_wait_save->size() > 0 && pcd_save_en) {
     string file_name = string("scans.pcd");
     string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
