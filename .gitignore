@@ -6,11 +6,10 @@ cmake-build-debug*
 # Created by https://www.gitignore.io/api/c++,code,cmake,eclipse
 # Edit at https://www.gitignore.io/?templates=c++,code,cmake,eclipse
 
-ada_lio/Log/*
-ada_lio/PCD/*
-ada_lio/PCD/*.pcd
-*.txt
-ada_lio/Log/mat_pre.txt
+spark_fast_lio/Log/*
+spark_fast_lio/PCD/*
+spark_fast_lio/PCD/*.pcd
+spark_fast_lio/Log/mat_pre.txt
 
 ### C++ ###
 # Prerequisites

@@ -63,4 +63,4 @@ repos:
             # TODO(hlim): Remove `-runtime/string` and `-build/include`
             "--filter=-whitespace/line_length,-legal/copyright,-build/include_order,-runtime/references,-build/c++11,-build/namespaces, -build/header_guard, -runtime/string, -build/include",
           ]
-        exclude: 'ada_lio/LOG|ada_lio/PCD|ada_lio/third_party|ada_lio/include/matplotlibcpp.h'
+        exclude: 'spark_fast_lio/LOG|spark_fast_lio/PCD|spark_fast_lio/third_party|spark_fast_lio/include/matplotlibcpp.h'

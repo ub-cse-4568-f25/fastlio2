@@ -9,9 +9,6 @@ Put the code in your workspace/src folder
 ```shell
 cd ${YOUR_WORKSPACE}/src
 git clone git@github.mit.edu:SPARK/spark_fast_lio.git
-cd spark_fast_lio
-git submodule update --init --recursive
-cd ../..
 catkin build -DCMAKE_BUILD_TYPE=Release
 ```
 
@@ -84,29 +81,4 @@ To substitute LOCUS with SPARK-FAST-LIO, you can easily do it by using the follo
     <include file="$(find spark_fast_lio)/launch/dcist/mapping_hamilton.launch" if="$(arg run_lidar_odom)">
        <arg name="robot_name" value="$(arg robot_name)"/>
    </include>
-```
-
-______________________________________________________________________
-
-## ToDo
-
-- \[X\] Set all the launch files for convenience
-- \[X\] Support DCIST project
-- \[ \] Remove adaptive mode part (due to patent issue from KAIST)
-- \[ \] Resolve TF issue between LiDAR and body frame (ToDo. Check the origin of the Kimera-VIO's map frame)
-
-______________________________________________________________________
-
-## Note - how to use `Adaptive mode` (yet will be deprecated soon)
-
-- Edit parameters in `.yaml` files
-
-```yaml
-filter_size_map: 0.5 #bigger voxel size
-adaptive:
-    adaptive_voxelization_en: true # If true, ADA-FAST-LIO2, or just FAST-LIO2
-    filter_size_map_smaller: 0.2 # It should be smaller than `filter_size_map`
-    neighbor_xy_thres: 5.0 # xy neighbor threshold
-    num_thr_adaptive_voxelization: 700
-    num_thr_adaptive_voxelization_neighbor: 300 # For Velodyne 16, this method is not applicable
 ```
