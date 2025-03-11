@@ -84,7 +84,7 @@ void Preprocess::process(const sensor_msgs::PointCloud2::ConstPtr &msg,
       break;
 
     default:
-      printf("Error LiDAR Type");
+      ROS_FATAL("Error LiDAR Type");
       break;
   }
   *pcl_out = pl_surf;
@@ -178,7 +178,7 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg) 
       // pl_surf += pl;
     }
     time += omp_get_wtime() - t0;
-    printf("Feature extraction time: %lf \n", time / count);
+    ROS_DEBUG("Feature extraction time: %lf \n", time / count);
   } else {
     for (uint i = 1; i < plsize; i++) {
       if ((msg->points[i].line < N_SCANS) &&
@@ -269,8 +269,6 @@ void Preprocess::oust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg) {
       give_feature(pl, types);
     }
   } else {
-    // cout << "===================================" << endl;
-    // printf("Pt size = %d, N_SCANS = %d\r\n", plsize, N_SCANS);
     for (size_t i = 0; i < pl_orig.points.size(); i++) {
       if (i % point_filter_num != 0) continue;
 
@@ -372,8 +370,6 @@ void Preprocess::kmoust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
       give_feature(pl, types);
     }
   } else {
-    //     cout << "===================================" << endl;
-    //     printf("Pt size = %d, N_SCANS = %d\r\n", plsize, N_SCANS);
     for (size_t i = 0; i < pl_orig.points.size(); i++) {
       if (i % point_filter_num != 0) continue;
 
@@ -400,8 +396,6 @@ void Preprocess::kmoust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
 }
 
 void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg) {
-  std::cout << "velodyne handler runs" << std::endl;
-
   pl_surf.clear();
   pl_corn.clear();
   pl_full.clear();
@@ -448,7 +442,6 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
       if (!given_offset_time) {
         double yaw_angle = atan2(added_pt.y, added_pt.x) * 57.2957;
         if (is_first[layer]) {
-          // printf("layer: %d; is first: %d", layer, is_first[layer]);
           yaw_fp[layer]      = yaw_angle;
           is_first[layer]    = false;
           added_pt.curvature = 0.0;
@@ -511,7 +504,6 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
         double yaw_angle = atan2(added_pt.y, added_pt.x) * 57.2957;
 
         if (is_first[layer]) {
-          // printf("layer: %d; is first: %d", layer, is_first[layer]);
           yaw_fp[layer]      = yaw_angle;
           is_first[layer]    = false;
           added_pt.curvature = 0.0;
@@ -552,7 +544,7 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> &pl, std::vector<orgtyp
   auto plsize = pl.size();
   size_t plsize2;
   if (plsize == 0) {
-    printf("something wrong\n");
+    ROS_ERROR("something wrong\n");
     return;
   }
   uint head = 0;

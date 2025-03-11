@@ -35,11 +35,6 @@
 #include <math.h>
 #include <unistd.h>
 
-#include <csignal>
-#include <fstream>
-#include <mutex>
-#include <thread>
-
 #include <Eigen/Core>
 #include <geometry_msgs/Vector3.h>
 #include <nav_msgs/Odometry.h>
@@ -89,9 +84,8 @@ mutex mtx_buffer;
 condition_variable sig_buffer;
 
 string root_dir = ROOT_DIR;
-string sequence_name, save_dir, robot_name;
-string map_file_path, lid_topic, imu_topic, map_frame, lidar_frame, base_frame, imu_frame,
-    visualization_frame;
+string sequence_name, save_dir;
+string map_file_path, map_frame, lidar_frame, base_frame, imu_frame, visualization_frame;
 
 double res_mean_last = 0.05, total_residual = 0.0;
 double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
@@ -119,6 +113,7 @@ vector<double> extrinT(3, 0.0);
 vector<double> extrinR(9, 0.0);
 deque<double> time_buffer;
 deque<PointCloudXYZI::Ptr> lidar_buffer;
+
 deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 
 PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
@@ -164,24 +159,22 @@ std::string output_pose_file = "/home/shapelim/fastlio_original_poses.txt";
 
 void SigHandle(int sig) {
   flg_exit = true;
-  ROS_WARN("catch sig %d", sig);
+  ROS_DEBUG("catch sig %d", sig);
   sig_buffer.notify_all();
 }
 
-inline void dump_lio_state_to_log(FILE *fp) {
+inline void dump_lio_state_to_log(std::ofstream& out) {
   V3D rot_ang(Log(state_point.rot.toRotationMatrix()));
-  fprintf(fp, "%lf ", Measures.lidar_beg_time - first_lidar_time);
-  fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                          // Angle
-  fprintf(fp, "%lf %lf %lf ", state_point.pos(0), state_point.pos(1), state_point.pos(2));  // Pos
-  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                               // omega
-  fprintf(fp, "%lf %lf %lf ", state_point.vel(0), state_point.vel(1), state_point.vel(2));  // Vel
-  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                               // Acc
-  fprintf(fp, "%lf %lf %lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));  // Bias_g
-  fprintf(fp, "%lf %lf %lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));  // Bias_a
-  fprintf(
-      fp, "%lf %lf %lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]);  // Bias_a
-  fprintf(fp, "\r\n");
-  fflush(fp);
+  out << Measures.lidar_beg_time - first_lidar_time << " ";
+  out << rot_ang(0) << " " << rot_ang(1) << " " << rot_ang(2) << " "; // Angle
+  out << state_point.pos(0) << " " << state_point.pos(1) << " " << state_point.pos(2);  // Pos
+  out << 0.0 << " " << 0.0 << " " << 0.0 << " ";
+  out << state_point.vel(0) << " " << state_point.vel(1) << " " << state_point.vel(2) << " ";  // Vel
+  out << 0.0 << " " << 0.0 << " " << 0.0 << " ";
+  out << state_point.bg(0) << " " << state_point.bg(1) << " " << state_point.bg(2) << " ";  // Bias_g
+  out << state_point.ba(0) << " " << state_point.ba(1) << " " << state_point.ba(2) << " ";  // Bias_a
+  out << state_point.grav[0] << " " << state_point.grav[1] << " " << state_point.grav[2];  // Bias_a
+  out << std::endl;
 }
 
 int count_neighboring_pts(PointCloudXYZI &cloud, double xy_abs_thr) {
@@ -379,16 +372,14 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
 
   if (!time_sync_en && abs(last_timestamp_imu - last_timestamp_lidar) > 10.0 &&
       !imu_buffer.empty() && !lidar_buffer.empty()) {
-    printf("IMU and LiDAR not Synced, IMU time: %lf, lidar header time: %lf \n",
-           last_timestamp_imu,
-           last_timestamp_lidar);
+    ROS_WARN_STREAM("IMU and LiDAR not Synced, IMU time: " << last_timestamp_imu << ", lidar header time: " << last_timestamp_lidar);
   }
 
   if (time_sync_en && !timediff_set_flg && abs(last_timestamp_lidar - last_timestamp_imu) > 1 &&
       !imu_buffer.empty()) {
     timediff_set_flg       = true;
     timediff_lidar_wrt_imu = last_timestamp_lidar + 0.1 - last_timestamp_imu;
-    printf("Self sync IMU and LiDAR, time diff is %.10lf \n", timediff_lidar_wrt_imu);
+    ROS_INFO("Self sync IMU and LiDAR, time diff is %.10lf \n", timediff_lidar_wrt_imu);
   }
 
   PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
@@ -430,9 +421,9 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
 double lidar_mean_scantime = 0.0;
 int scan_num               = 0;
 bool sync_packages(MeasureGroup &meas, bool verbose) {
-  if (verbose)
-    std::cout << "\033[1;34m" << lidar_buffer.size() << " vs " << imu_buffer.size() << "\033[0m"
-              << std::endl;
+  if (verbose) {
+    ROS_INFO_STREAM(lidar_buffer.size() << " vs " << imu_buffer.size());
+  }
 
   if (lidar_buffer.empty() || imu_buffer.empty()) {
     return false;
@@ -452,13 +443,13 @@ bool sync_packages(MeasureGroup &meas, bool verbose) {
     } else {
       scan_num++;
       if (meas.lidar->points.back().curvature < 80 || meas.lidar->points.back().curvature > 120) {
-        std::cout << "\033[1;33m[Warning] meas.lidar->points.back().curvature ("
-                  << meas.lidar->points.back().curvature << ") should be close to 100\033[0m"
-                  << std::endl;
-        std::cout << "\033[1;33m[Warning] Please check the `timestamp_unit` or values of `time` "
-                     "(or `t`) field of the point cloud input from your sensor\033[0m"
-                  << std::endl;
+        ROS_WARN_STREAM("meas.lidar->points.back().curvature ("
+                        << meas.lidar->points.back().curvature
+                        << ") should be close to 100) Please check the `timestamp_unit`"
+                        << " or values of `time` (or `t`) field of the point cloud input"
+                        << " from your sensor");
       }
+
       lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / denominator;
       lidar_mean_scantime +=
           (meas.lidar->points.back().curvature / denominator - lidar_mean_scantime) / scan_num;
@@ -471,11 +462,10 @@ bool sync_packages(MeasureGroup &meas, bool verbose) {
 
   if (last_timestamp_imu < lidar_end_time) {
     if (verbose) {
-      std::cout << std::fixed << std::setprecision(9);
-      std::cout << "\033[1;33m " << last_timestamp_imu << " vs " << lidar_end_time;
-      std::cout << ". Timestamp is not matched. Discarded\033[0m" << std::endl;
-      std::cout.unsetf(std::ios::fixed);
-      std::cout.precision(0);
+      std::stringstream ss;
+      ss << std::fixed << std::setprecision(9) << last_timestamp_imu << " vs "
+        << lidar_end_time << ". Timestamp is not matched. Discarded";
+      ROS_INFO_STREAM(ss.str());
     }
     return false;
   }
@@ -695,8 +685,7 @@ void set_posestamp(T &out, const ::string viz_frame = "imu") {
 
 void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   odomAftMapped.header.frame_id = map_frame;
-  odomAftMapped.header.stamp =
-      ros::Time().fromSec(lidar_end_time);  // ros::Time().fromSec(lidar_end_time);
+  odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);
   set_posestamp(odomAftMapped.pose, visualization_frame);
   if (visualization_frame == "lidar") {
     odomAftMapped.child_frame_id = lidar_frame;
@@ -722,17 +711,24 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   /******* Save poses *******/
   const auto &[lidar_position, lidar_orientation] = transform_pose_wrt_lidar_frame();
 
-  std::ofstream pose_file;
-  pose_file.open(output_pose_file, std::ios::app);
-  if (pose_file.is_open()) {
-    pose_file << std::fixed << std::setprecision(8) << lidar_end_time << " " << lidar_position(0)
-              << " " << lidar_position(1) << " " << lidar_position(2) << " "
-              << lidar_orientation.x() << " " << lidar_orientation.y() << " "
-              << lidar_orientation.z() << " " << lidar_orientation.w() << std::endl;
-    pose_file.close();
+  if (!output_pose_file.empty()) {
+    std::ofstream pose_file;
+    pose_file.open(output_pose_file, std::ios::app);
+    if (pose_file.is_open()) {
+      pose_file << std::fixed << std::setprecision(8)
+                << lidar_end_time << " "
+                << lidar_position(0) << " "
+                << lidar_position(1) << " "
+                << lidar_position(2) << " "
+                << lidar_orientation.x() << " "
+                << lidar_orientation.y() << " "
+                << lidar_orientation.z() << " "
+                << lidar_orientation.w() << std::endl;
+      pose_file.close();
+    }
   }
 
-  static tf::TransformBroadcaster br_imu, br_base, br_lidar;
+  static tf::TransformBroadcaster br;
   tf::Transform transform;
   tf::Quaternion q;
   transform.setOrigin(tf::Vector3(odomAftMapped.pose.pose.position.x,
@@ -743,28 +739,8 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
   q.setY(odomAftMapped.pose.pose.orientation.y);
   q.setZ(odomAftMapped.pose.pose.orientation.z);
   transform.setRotation(q);
-  /***
-   * Note, currently, its `map_frame` indicates the origin of the each sensor's coordinates,
-   * so broadcasting them at the same time breaks down th TF relationship
-   ***/
 
-  // br_imu.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame,
-  // imu_frame));
-
-  // Transformation w.r.t. LiDAR frame
-  // transform.setOrigin(tf::Vector3(lidar_position(0), lidar_position(1), lidar_position(2)));
-  // transform.setRotation(tf::Quaternion(lidar_orientation.x(), lidar_orientation.y(),
-  // lidar_orientation.z(), lidar_orientation.w()));
-  // br_lidar.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame,
-  // lidar_frame));
-
-  // Transformation w.r.t. base frame
-  const auto &[base_position, base_orientation] = transform_pose_wrt_base_frame();
-  transform.setOrigin(tf::Vector3(base_position(0), base_position(1), base_position(2)));
-  transform.setRotation(tf::Quaternion(
-      base_orientation.x(), base_orientation.y(), base_orientation.z(), base_orientation.w()));
-  br_base.sendTransform(
-      tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, base_frame));
+   br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, map_frame, odomAftMapped.child_frame_id));
 }
 
 void publish_path(const ros::Publisher pubPath) {
@@ -892,10 +868,50 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
   solve_time += omp_get_wtime() - solve_start_;
 }
 
-int main(int argc, char **argv) {
-  ros::init(argc, argv, "laserMapping");
-  ros::NodeHandle nh;
+bool lookup_base_extrinsics(std::vector<double>& extrinT_Lidar_wrt_Base,
+                            std::vector<double>& extrinR_Lidar_wrt_Base) {
+  tf::TransformListener listener;
+  tf::StampedTransform transform;
+  try {
+    ROS_INFO_STREAM("Looking up " << base_frame << " ->  " << lidar_frame);
+    listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
+    listener.lookupTransform(base_frame, lidar_frame, ros::Time(0), transform);
+  } catch (tf::TransformException &ex) {
+    ROS_ERROR("%s", ex.what());
+    return false;
+  }
 
+  // Translation
+  extrinT_Lidar_wrt_Base[0] = transform.getOrigin().x();
+  extrinT_Lidar_wrt_Base[1] = transform.getOrigin().y();
+  extrinT_Lidar_wrt_Base[2] = transform.getOrigin().z();
+
+  ROS_INFO("Translation: [%f, %f, %f]", extrinT_Lidar_wrt_Base[0], extrinT_Lidar_wrt_Base[1], extrinT_Lidar_wrt_Base[2]);
+
+  // Rotation (Matrix)
+  tf::Matrix3x3 m(transform.getRotation());
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      extrinR_Lidar_wrt_Base[i * 3 + j] = m[i][j];
+    }
+  }
+
+  const auto q = transform.getRotation();
+  ROS_INFO("Rotation (Quaternion): [%f, %f, %f, %f]", q.x(), q.y(), q.z(), q.w());
+
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);
+  ROS_INFO("Rotation (RPY in radians): [%f, %f, %f]", roll, pitch, yaw);
+  ROS_INFO("Rotation (RPY in degrees): [%f, %f, %f]", roll * 180.0 / M_PI, pitch * 180.0 / M_PI, yaw * 180.0 / M_PI);
+  return true;
+}
+
+int main(int argc, char **argv) {
+  ros::init(argc, argv, "laser_mapping");
+
+  bool pcl_verbose = true;
+
+  ros::NodeHandle nh("~");
   nh.param<bool>("publish/path_en", path_en, true);
   nh.param<bool>("publish/scan_publish_en", scan_pub_en, true);
   nh.param<bool>("publish/dense_publish_en", dense_pub_en, true);
@@ -906,15 +922,13 @@ int main(int argc, char **argv) {
   nh.param<string>("map_file_path", map_file_path, "");
   nh.param<string>("common/save_dir", save_dir, "");
   nh.param<string>("common/sequence_name", sequence_name, "");
-  nh.param<string>("common/robot_name", robot_name, "");
   nh.param<string>("common/map_frame", map_frame, "map");
   nh.param<string>("common/lidar_frame", lidar_frame, "lidar");
-  nh.param<string>("common/base_frame", base_frame, "base");
+  nh.param<string>("common/base_frame", base_frame, "");
   nh.param<string>("common/imu_frame", imu_frame, "base");
   nh.param<string>("common/visualization_frame", visualization_frame, "imu");
-  nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
-  nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
   nh.param<bool>("common/time_sync_en", time_sync_en, false);
+  nh.param<bool>("common/pcl_verbose", pcl_verbose, true);
   nh.param<double>("filter_size_map", filter_size_map_min, 0.5);
   nh.param<double>("cube_side_length", cube_len, 200);
   nh.param<float>("mapping/det_range", DET_RANGE, 300.f);
@@ -945,41 +959,58 @@ int main(int argc, char **argv) {
                 500);
   nh.param<bool>("adaptive/adaptive_voxelization_en", adaptive_voxelization_en, false);
   nh.param<double>("adaptive/neighbor_xy_thres", neighbor_xy_thres, 5.0);
-  std::cout << "p_pre->lidar_type " << p_pre->lidar_type << std::endl;
+  ROS_DEBUG_STREAM("p_pre->lidar_type " << p_pre->lidar_type);
+
+  if (!pcl_verbose) {
+    pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
+  }
+
+  if (visualization_frame == "base" && base_frame.empty()) {
+    ROS_FATAL("base_frame must not be empty to use base visualization");
+    return 1;
+  }
 
   path.header.stamp    = ros::Time::now();
   path.header.frame_id = map_frame;
 
-  std::cout << "\033[1;34mLiDAR topic: " << lid_topic << "\033[0m" << std::endl;
-  std::cout << "\033[1;34mIMU topic: " << imu_topic << "\033[0m" << std::endl;
-  std::cout << "\033[1;32mextrinT of " << robot_name << ": " << extrinT[0] << " " << extrinT[1]
-            << " " << extrinT[2] << "\033[0m" << std::endl;
-  std::string space(robot_name.length() + 13, ' ');
-  std::cout << "\033[1;32mextrinR of " << robot_name << ": " << extrinR[0] << " " << extrinR[1]
-            << " " << extrinR[2] << "\n";
-  std::cout << space << extrinR[3] << " " << extrinR[4] << " " << extrinR[5] << "\n";
-  std::cout << space << extrinR[6] << " " << extrinR[7] << " " << extrinR[8] << "\n\033[0m";
-  std::cout << "\033[1;32mNote, those variables should be set in the yaml file by manual!"
-            << "\n\033[0m";
-
-  // Flush
-  std::string prefix = save_dir + "/" + sequence_name;
-  std::cout << "Save dir: " << prefix << std::endl;
-
-  std::ostringstream oss;
-  oss << std::fixed << std::setprecision(1) << filter_size_map_min;
-  std::string voxel_size_str = oss.str();
-  std::replace(voxel_size_str.begin(), voxel_size_str.end(), '.', '_');
-  if (adaptive_voxelization_en) {
-    output_pose_file = prefix + "/FastLIO2_Adaptive_" + voxel_size_str + ".txt";
-  } else {
-    output_pose_file = prefix + "/FastLIO2_" + voxel_size_str + ".txt";
+  { // temporary scope
+    ROS_INFO_STREAM("extrinT: x=" << extrinT[0] << " y=" << extrinT[1] << " z=" << extrinT[2]);
+    Eigen::Matrix3d lidar_R_imu;
+    lidar_R_imu << MAT_FROM_ARRAY(extrinR);
+    Eigen::Quaterniond q(lidar_R_imu);
+    ROS_INFO_STREAM("extrinR: x=" << q.x() << " y=" << q.y() << " z=" << q.z() << " w=" << q.w());
   }
 
-  std::ofstream pose_file;
-  pose_file.open(output_pose_file);
-  pose_file << "#timestamp x y z qx qy qz qw\n";
-  pose_file.close();
+  // Flush
+  std::string prefix = save_dir;
+  if (!sequence_name.empty()) {
+    prefix += prefix.empty() ? sequence_name : "/" + sequence_name;
+  }
+
+  if (prefix.empty()) {
+    ROS_INFO("No save dir specified! not logging poses!");
+  } else {
+    ROS_INFO_STREAM("Save dir: " << prefix);
+  }
+
+  if (!prefix.empty()) {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1) << filter_size_map_min;
+    std::string voxel_size_str = oss.str();
+    std::replace(voxel_size_str.begin(), voxel_size_str.end(), '.', '_');
+    if (adaptive_voxelization_en) {
+      output_pose_file = prefix + "/FastLIO2_Adaptive_" + voxel_size_str + ".txt";
+    } else {
+      output_pose_file = prefix + "/FastLIO2_" + voxel_size_str + ".txt";
+    }
+  }
+
+  if (!output_pose_file.empty()) {
+    std::ofstream pose_file;
+    pose_file.open(output_pose_file);
+    pose_file << "#timestamp x y z qx qy qz qw\n";
+    pose_file.close();
+  }
 
   if (adaptive_voxelization_en) {
     cout << "\033[32;1mAdaptive voxelization on!" << endl;
@@ -988,66 +1019,16 @@ int main(int argc, char **argv) {
     cout << "Adaptive voxel size: " << filter_size_map_smaller << "\033[0m" << endl;
   }
 
-  tf::TransformListener listener;
-  tf::StampedTransform transform;
-
   vector<double> extrinT_Lidar_wrt_Base(3, 0.0);
   vector<double> extrinR_Lidar_wrt_Base(9, 0.0);
+  extrinR_Lidar_wrt_Base[0] = 1.0;
+  extrinR_Lidar_wrt_Base[4] = 1.0;
+  extrinR_Lidar_wrt_Base[8] = 1.0;
 
-  /**
-   * Currently, some Kimera-Multi bags have no tfs, so only support it in the case robots are from
-   * the DCIST project
-   */
-
-  bool is_dcist = robot_name == "hamilton" || robot_name == "acl_jackal" ||
-                  robot_name == "acl_jackal2" || robot_name == "apis" ||
-                  robot_name == "hydra_multi_sparkal1" || robot_name == "sparkal1" ||
-                  robot_name == "sparkal2" || robot_name == "hathor" || robot_name == "thoth" ||
-                  robot_name == "sobek";
-  if (is_dcist) {
-    try {
-      std::cout << base_frame << "  " << lidar_frame << std::endl;
-      listener.waitForTransform(base_frame, lidar_frame, ros::Time(0), ros::Duration(5.0));
-      listener.lookupTransform(base_frame, lidar_frame, ros::Time(0), transform);
-
-      // Translation
-      extrinT_Lidar_wrt_Base[0] = transform.getOrigin().x();
-      extrinT_Lidar_wrt_Base[1] = transform.getOrigin().y();
-      extrinT_Lidar_wrt_Base[2] = transform.getOrigin().z();
-
-      ROS_INFO("Translation: [%f, %f, %f]",
-               extrinT_Lidar_wrt_Base[0],
-               extrinT_Lidar_wrt_Base[1],
-               extrinT_Lidar_wrt_Base[2]);
-
-      // Rotation (Matrix)
-      tf::Matrix3x3 m(transform.getRotation());
-      for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-          extrinR_Lidar_wrt_Base[i * 3 + j] = m[i][j];
-        }
-      }
-
-      ROS_INFO("Rotation (Quaternion): [%f, %f, %f, %f]",
-               transform.getRotation().x(),
-               transform.getRotation().y(),
-               transform.getRotation().z(),
-               transform.getRotation().w());
-
-      double roll, pitch, yaw;
-      m.getRPY(roll, pitch, yaw);
-      ROS_INFO("Rotation (RPY in radians): [%f, %f, %f]", roll, pitch, yaw);
-      ROS_INFO("Rotation (RPY in degrees): [%f, %f, %f]",
-               roll * 180.0 / M_PI,
-               pitch * 180.0 / M_PI,
-               yaw * 180.0 / M_PI);
-    } catch (tf::TransformException &ex) {
-      ROS_ERROR("%s", ex.what());
-    }
-  } else {
-    if (visualization_frame == "base") {
-      throw invalid_argument("[SPARK-LIO] Not supported for non-DCIST robots!");
-      return 0;
+  // load optional transform from IMU to robot base
+  if (!base_frame.empty()) {
+    if (!lookup_base_extrinsics(extrinT_Lidar_wrt_Base, extrinR_Lidar_wrt_Base)) {
+      return 1;
     }
   }
 
@@ -1084,48 +1065,46 @@ int main(int argc, char **argv) {
   kf.init_dyn_share(get_f, df_dx, df_dw, h_share_model, NUM_MAX_ITERATIONS, epsi);
 
   /*** debug record ***/
-  FILE *fp;
   string pos_log_dir = root_dir + "/Log/pos_log.txt";
-  fp                 = fopen(pos_log_dir.c_str(), "w");
+  std::ofstream fp(pos_log_dir);
 
   ofstream fout_pre, fout_out;
   fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"), ios::out);
   fout_out.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
-  if (fout_pre && fout_out)
-    cout << "~~~~" << ROOT_DIR << " file opened" << endl;
-  else
-    cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
+  if (fout_pre && fout_out) {
+    ROS_INFO_STREAM("~~~~" << ROOT_DIR << " file opened");
+  } else {
+    ROS_WARN_STREAM("~~~~" << ROOT_DIR << " doesn't exist");
+  }
 
   /*** ROS subscribe initialization ***/
   ros::Subscriber sub_pcl;
   if (p_pre->lidar_type != AVIA) {
-    sub_pcl = nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
+    sub_pcl = nh.subscribe("lidar", 200000, standard_pcl_cbk);
   } else {
 #if defined(LIVOX_ROS_DRIVER_FOUND) && LIVOX_ROS_DRIVER_FOUND
-    sub_pcl = nh.subscribe(lid_topic, 200000, livox_pcl_cbk);
+    sub_pcl = nh.subscribe("lidar", 200000, livox_pcl_cbk);
 #else
     ROS_FATAL("Not built with livox_ros_driver! Unable to suscribe to AVIA lidar");
     return 1;
 #endif
   }
 
-  ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
-  ros::Publisher pubLaserCloudFull =
-      nh.advertise<sensor_msgs::PointCloud2>("/" + robot_name + "/locus/cloud_registered", 100000);
-  ros::Publisher pubLaserCloudFull_lidar = nh.advertise<sensor_msgs::PointCloud2>(
-      "/" + robot_name + "/locus/cloud_registered_lidar", 100000);
-  ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>(
-      "/" + robot_name + "/locus/cloud_registered_body", 100000);
-  ros::Publisher pubLaserCloudFull_base = nh.advertise<sensor_msgs::PointCloud2>(
-      "/" + robot_name + "/locus/cloud_registered_base", 100000);
-  ros::Publisher pubOdomAftMapped =
-      nh.advertise<nav_msgs::Odometry>("/" + robot_name + "/locus/odometry", 100000);
-  ros::Publisher pubPath = nh.advertise<nav_msgs::Path>("/" + robot_name + "/locus/path", 100000);
+  ros::Subscriber sub_imu = nh.subscribe("imu", 200000, imu_cbk);
+  ROS_INFO_STREAM("LiDAR topic: " << sub_pcl.getTopic());
+  ROS_INFO_STREAM("IMU topic: " << sub_imu.getTopic());
+
+  ros::Publisher pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("cloud_registered", 100000);
+  ros::Publisher pubLaserCloudFull_lidar = nh.advertise<sensor_msgs::PointCloud2>("cloud_registered_lidar", 100000);
+  ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("cloud_registered_body", 100000);
+  ros::Publisher pubLaserCloudFull_base = nh.advertise<sensor_msgs::PointCloud2>("cloud_registered_base", 100000);
+  ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("odometry", 100000);
+  ros::Publisher pubPath = nh.advertise<nav_msgs::Path>("path", 100000);
   //------------------------------------------------------------------------------------------------------
+
   signal(SIGINT, SigHandle);
-  ros::Rate rate(5000);
-  bool status = ros::ok();
-  while (status) {
+  ros::WallRate rate(5000);
+  while (ros::ok()) {
     if (flg_exit) break;
     ros::spinOnce();
     if (sync_packages(Measures, false)) {
@@ -1278,8 +1257,7 @@ int main(int argc, char **argv) {
       if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFull);
       if (scan_pub_en && scan_lidar_pub_en) publish_frame(pubLaserCloudFull_lidar, "lidar");
       if (scan_pub_en && scan_body_pub_en) publish_frame(pubLaserCloudFull_body, "imu");
-      if (scan_pub_en && scan_base_pub_en && is_dcist)
-        publish_frame(pubLaserCloudFull_base, "base");
+      if (scan_pub_en && scan_base_pub_en) publish_frame(pubLaserCloudFull_base, "base");
 
       /*** Debug variables ***/
       if (runtime_pos_log) {
@@ -1307,7 +1285,7 @@ int main(int argc, char **argv) {
         s_plot9[time_log_counter]  = aver_time_consu;
         s_plot10[time_log_counter] = add_point_size;
         time_log_counter++;
-        printf(
+        ROS_INFO(
             "[ mapping ]: time: IMU + Map + Input Downsample: %0.6f ave match: %0.6f ave solve: "
             "%0.6f  ave ICP: %0.6f  map incre: %0.6f ave total: %0.6f icp: %0.6f construct H: "
             "%0.6f \n",
@@ -1330,7 +1308,6 @@ int main(int argc, char **argv) {
       }
     }
 
-    status = ros::ok();
     rate.sleep();
   }
 
@@ -1350,33 +1327,23 @@ int main(int argc, char **argv) {
 
   if (runtime_pos_log) {
     vector<double> t, s_vec, s_vec2, s_vec3, s_vec4, s_vec5, s_vec6, s_vec7;
-    FILE *fp2;
     string log_dir = root_dir + "/Log/fast_lio_time_log.csv";
-    fp2            = fopen(log_dir.c_str(), "w");
-    fprintf(fp2,
-            "time_stamp, total time, scan point size, incremental time, search time, delete size, "
-            "delete time, tree size st, tree size end, add point size, preprocess time\n");
+    std::ofstream fp2(log_dir);
+    fp2 << "time_stamp, total time, scan point size, incremental time, search time, delete size, "
+           "delete time, tree size st, tree size end, add point size, preprocess time" << std::endl;
     for (int i = 0; i < time_log_counter; i++) {
-      fprintf(fp2,
-              "%0.8f,%0.8f,%d,%0.8f,%0.8f,%d,%0.8f,%d,%d,%d,%0.8f\n",
-              T1[i],
-              s_plot[i],
-              static_cast<int>(s_plot2[i]),
-              s_plot3[i],
-              s_plot4[i],
-              static_cast<int>(s_plot5[i]),
-              s_plot6[i],
-              static_cast<int>(s_plot7[i]),
-              static_cast<int>(s_plot8[i]),
-              static_cast<int>(s_plot10[i]),
-              s_plot11[i]);
+      fp2 << std::setprecision(8) << T1[i] << "," << s_plot[i] << ","
+          << static_cast<int>(s_plot2[i]) << "," << s_plot3[i] << ","
+          << s_plot4[i] << "," << static_cast<int>(s_plot5[i]) << ","
+          << s_plot6[i] << "," << static_cast<int>(s_plot7[i]) << ","
+          << static_cast<int>(s_plot8[i]) << "," << static_cast<int>(s_plot10[i])
+          << "," << s_plot11[i] << std::endl;
       t.push_back(T1[i]);
       s_vec.push_back(s_plot9[i]);
       s_vec2.push_back(s_plot3[i] + s_plot6[i]);
       s_vec3.push_back(s_plot4[i]);
       s_vec5.push_back(s_plot[i]);
     }
-    fclose(fp2);
   }
 
   return 0;
