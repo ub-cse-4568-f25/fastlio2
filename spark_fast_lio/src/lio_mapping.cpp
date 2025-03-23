@@ -35,6 +35,8 @@
 #include <math.h>
 #include <unistd.h>
 
+#include <deque>
+
 #include <Eigen/Core>
 #include <geometry_msgs/Vector3.h>
 #include <nav_msgs/Odometry.h>
@@ -73,19 +75,21 @@ double T1[MAXN], s_plot[MAXN], s_plot2[MAXN], s_plot3[MAXN], s_plot4[MAXN], s_pl
 double match_time = 0, solve_time = 0, solve_const_H_time = 0;
 int kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
 bool runtime_pos_log = false, pcd_save_en = false, time_sync_en = false, extrinsic_est_en = true,
-     path_en = true;
+     path_en                  = true;
+bool enable_gravity_alignment = false;
+bool is_gravity_aligned       = false;
 /**************************/
 
 float res_last[100000]    = {0.0};
 float DET_RANGE           = 300.0f;
 const float MOV_THRESHOLD = 1.5f;
 
-mutex mtx_buffer;
-condition_variable sig_buffer;
+std::mutex mtx_buffer;
+std::condition_variable sig_buffer;
 
-string root_dir = ROOT_DIR;
-string sequence_name, save_dir;
-string map_file_path, map_frame, lidar_frame, base_frame, imu_frame, visualization_frame;
+std::string root_dir = ROOT_DIR;
+std::string sequence_name, save_dir;
+std::string map_file_path, map_frame, lidar_frame, base_frame, imu_frame, visualization_frame;
 
 double res_mean_last = 0.05, total_residual = 0.0;
 double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
@@ -98,21 +102,28 @@ int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidN
     pcd_save_interval = -1, pcd_index = 0;
 int point_filter_num         = 4;  // empirically, 4 showed the best performance
 int feats_down_size_neighbor = numeric_limits<int>::max();
-int degeneracy_tick_criteria = 3, degeneracy_tick = degeneracy_tick_criteria + 1;
+// Empirically, the acceleration difference in mobile robots is usually over 0.35.
+double acc_diff_thr              = 0.2;
+int num_moving_frames_thr        = 10;
+int num_gravity_measurements_thr = 10;
 bool point_selected_surf[100000] = {0};
 bool lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
 bool scan_pub_en = false, dense_pub_en = false, scan_lidar_pub_en = false, scan_body_pub_en = false,
      scan_base_pub_en = false;
 
-vector<vector<int>> pointSearchInd_surf;
-vector<BoxPointType> cub_needrm;
-vector<PointVector> Nearest_Points;
-vector<double> extrinT(3, 0.0);
-vector<double> extrinR(9, 0.0);
-deque<double> time_buffer;
-deque<PointCloudXYZI::Ptr> lidar_buffer;
+std::deque<V3D> local_gravity_directions;
+std::deque<V3D> global_gravity_directions;
 
-deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
+std::vector<vector<int>> pointSearchInd_surf;
+std::vector<BoxPointType> cub_needrm;
+std::vector<PointVector> Nearest_Points;
+std::vector<double> g_base_vec{0.0, 0.0, -1.0};
+std::vector<double> extrinT(3, 0.0);
+std::vector<double> extrinR(9, 0.0);
+std::deque<double> time_buffer;
+std::deque<PointCloudXYZI::Ptr> lidar_buffer;
+
+std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 
 PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
 PointCloudXYZI::Ptr cloud_undistort(new PointCloudXYZI());
@@ -131,9 +142,12 @@ KD_TREE<PointType> ikdtree;
 V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);
 V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
 V3D euler_cur;
+V3D g_base(Zero3d);
+V3D mean_acc_stopped(Zero3d);
 V3D position_last(Zero3d);
 V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
+M3D R_gravity_aligned(Eye3d);
 /*** Only used for integration with the Hydra system ***/
 V3D Lidar_T_wrt_Base(Zero3d);
 M3D Lidar_R_wrt_Base(Eye3d);
@@ -177,14 +191,40 @@ inline void dump_lio_state_to_log(std::ofstream &out) {
   out << std::endl;
 }
 
-int count_neighboring_pts(PointCloudXYZI &cloud, double xy_abs_thr) {
-  int num_inliers = 0;
-  for (const auto &pt : cloud) {
-    if (abs(pt.x) < xy_abs_thr && abs(pt.y) < xy_abs_thr) {
-      num_inliers++;
-    }
+// Outputs rotation matrix that aligns a to b, i.e., R such that R * g_a = g_b
+M3D computeRelativeRotation(const Eigen::Vector3d &g_a, const Eigen::Vector3d &g_b) {
+  Eigen::Vector3d g_a_norm = g_a.normalized();
+  Eigen::Vector3d g_b_norm = g_b.normalized();
+
+  Eigen::Vector3d axis = g_a_norm.cross(g_b_norm);
+  double cos_theta     = g_a_norm.dot(g_b_norm);
+
+  if (std::fabs(1.0 - cos_theta) < 1e-3) {
+    return Eigen::Matrix3d::Identity();
   }
-  return num_inliers;
+
+  // Degenerate condition a = -b
+  // Compute cross product with any arbitrary nonparallel vector,
+  // i.e., Eigen::Vector3d(1, 2, 3)
+  if (std::fabs(1.0 + cos_theta) < 1e-3) {
+    Eigen::Vector3d perturbed = g_a_norm + Eigen::Vector3d(1, 2, 3);
+    axis                      = g_a_norm.cross(perturbed);
+
+    if (axis.norm() < 1e-6) {
+      perturbed = g_a_norm + Eigen::Vector3d(3, 2, 1);
+      axis      = g_a_norm.cross(perturbed);
+    }
+
+    axis.normalize();
+    return Eigen::AngleAxisd(M_PI, axis).toRotationMatrix();
+  } else {
+    axis.normalize();
+    double theta = std::acos(cos_theta);
+
+    Eigen::Quaterniond q(Eigen::AngleAxisd(theta, axis));
+
+    return q.toRotationMatrix();
+  }
 }
 
 void pointBodyToWorld_ikfom(PointType const *const pi, PointType *const po, state_ikfom &s) {
@@ -934,6 +974,11 @@ int main(int argc, char **argv) {
   nh.param<double>("mapping/acc_cov", acc_cov, 0.1);
   nh.param<double>("mapping/b_gyr_cov", b_gyr_cov, 0.0001);
   nh.param<double>("mapping/b_acc_cov", b_acc_cov, 0.0001);
+  nh.param<bool>("gravity_alignment/enable_gravity_alignment", enable_gravity_alignment, true);
+  nh.param<double>("gravity_alignment/acc_diff_thr", acc_diff_thr, 0.2);
+  nh.param<int>("gravity_alignment/num_moving_frames_thr", num_moving_frames_thr, 20);
+  nh.param<int>("gravity_alignment/num_gravity_measurements_thr", num_gravity_measurements_thr, 20);
+  nh.param<vector<double>>("gravity_alignment/g_base", g_base_vec, vector<double>{0.0, 0.0, -1.0});
   nh.param<double>("preprocess/blind", p_pre->blind, 0.01);
   nh.param<double>("preprocess/blind", p_pre->blind_for_human_pilots, 1.5);
   nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
@@ -1027,6 +1072,7 @@ int main(int argc, char **argv) {
   memset(point_selected_surf, true, sizeof(point_selected_surf));
   memset(res_last, -1000.0f, sizeof(res_last));
 
+  g_base << g_base_vec[0], g_base_vec[1], g_base_vec[2];
   Lidar_T_wrt_IMU << VEC_FROM_ARRAY(extrinT);
   Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
   Lidar_T_wrt_Base << VEC_FROM_ARRAY(extrinT_Lidar_wrt_Base);
@@ -1125,6 +1171,24 @@ int main(int argc, char **argv) {
         continue;
       }
 
+      static int num_consecutive_moving_frames = 0;
+      if (enable_gravity_alignment && !is_gravity_aligned && !base_frame.empty()) {
+        if (!flg_EKF_inited) {
+          // Assume that it is stationary at the beginning.
+          mean_acc_stopped = Measures.getMeanAcc();
+        } else {
+          const auto &mean_acc = Measures.getMeanAcc();
+          const auto acc_diff  = (mean_acc_stopped - mean_acc).norm();
+          if (acc_diff > acc_diff_thr) {
+            num_consecutive_moving_frames = min(num_consecutive_moving_frames + 1, 100000);
+          } else {
+            ROS_WARN_STREAM(
+                "Waiting for motion to perform gravity alignment...now a robot has been stopped");
+            num_consecutive_moving_frames = 0;
+          }
+        }
+      }
+
       flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true;
       /*** Segment the map in lidar FOV ***/
       lasermap_fov_segment();
@@ -1135,7 +1199,6 @@ int main(int argc, char **argv) {
       t1              = omp_get_wtime();
       feats_down_size = feats_down_body->points.size();
 
-      degeneracy_tick = min(degeneracy_tick + 1, 100000);
       /*****************************/
 
       /*** initialize the map kdtree ***/
@@ -1185,16 +1248,53 @@ int main(int argc, char **argv) {
       double t_update_start = omp_get_wtime();
       double solve_H_time   = 0;
       kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
+
+      /***** Perform gravity alignment *****/
+      // NOTE(hlim): Introduce a delay using `num_moving_frames_thr` to make sure
+      // the gravity vectors are sufficiently updated.
+      if (enable_gravity_alignment && !is_gravity_aligned && !base_frame.empty() &&
+          (num_consecutive_moving_frames > num_moving_frames_thr)) {
+        static const auto &offset_R_I_B = Lidar_R_wrt_Base * state_point.offset_R_L_I.inverse();
+
+        // NOTE(hlim): Here, we don't need to normalize the scale of vectors
+        V3D gravity_direction = kf.get_x().grav;
+        if (global_gravity_directions.size() < static_cast<size_t>(num_gravity_measurements_thr)) {
+          ROS_INFO_STREAM("Waiting for motion: " << global_gravity_directions.size() << " / "
+                                                 << num_gravity_measurements_thr);
+          global_gravity_directions.push_back(offset_R_I_B * gravity_direction);
+        } else {
+          V3D avg_global_gravity_vec = Eigen::Vector3d::Zero();
+          for (const auto &gravity_vec : global_gravity_directions) {
+            avg_global_gravity_vec += gravity_vec;
+          }
+          avg_global_gravity_vec /= global_gravity_directions.size();
+
+          R_gravity_aligned = computeRelativeRotation(avg_global_gravity_vec, g_base);
+          ROS_INFO_STREAM("Gravity alignment complete! `R_gravity_aligned`: " << R_gravity_aligned);
+          is_gravity_aligned = true;
+          local_gravity_directions.clear();
+        }
+      }
+      /*********************************/
+
       state_point = kf.get_x();
-      euler_cur   = SO3ToEuler(state_point.rot);
-      pos_lid     = state_point.pos + state_point.rot * state_point.offset_T_L_I;
-      geoQuat.x   = state_point.rot.coeffs()[0];
-      geoQuat.y   = state_point.rot.coeffs()[1];
-      geoQuat.z   = state_point.rot.coeffs()[2];
-      geoQuat.w   = state_point.rot.coeffs()[3];
+      // Update corrected rotation here
+      state_point.pos = R_gravity_aligned * state_point.pos;
+      state_point.rot = R_gravity_aligned * state_point.rot;
+      euler_cur       = SO3ToEuler(state_point.rot);
+      pos_lid         = state_point.pos + state_point.rot * state_point.offset_T_L_I;
+      geoQuat.x       = state_point.rot.coeffs()[0];
+      geoQuat.y       = state_point.rot.coeffs()[1];
+      geoQuat.z       = state_point.rot.coeffs()[2];
+      geoQuat.w       = state_point.rot.coeffs()[3];
 
       double t_update_end = omp_get_wtime();
 
+      if (enable_gravity_alignment && !is_gravity_aligned && !base_frame.empty()) {
+        ROS_WARN_STREAM(
+            "Gravity alignment is enabled but not yet completed. Waiting for alignment...");
+        continue;
+      }
       /******* Publish odometry *******/
       publish_odometry(pubOdomAftMapped);
 

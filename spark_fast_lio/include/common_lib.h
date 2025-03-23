@@ -62,6 +62,17 @@ struct MeasureGroup {
   double lidar_end_time;
   PointCloudXYZI::Ptr lidar;
   std::deque<sensor_msgs::Imu::ConstPtr> imu;
+
+  inline V3D getMeanAcc() {
+    V3D mean_acc(Zero3d);
+    for (const auto &meas : imu) {
+      const auto &imu_acc = meas->linear_acceleration;
+      V3D cur_acc;
+      cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
+      mean_acc += cur_acc;
+    }
+    return mean_acc /= static_cast<double>(imu.size());
+  }
 };
 
 struct Pose6D {
