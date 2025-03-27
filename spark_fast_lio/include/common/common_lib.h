@@ -6,13 +6,13 @@
 #include <vector>
 
 #include <Eigen/Eigen>
-#include <eigen_conversions/eigen_msg.h>
-#include <nav_msgs/Odometry.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <sensor_msgs/Imu.h>
-#include <so3_math.h>
-#include <tf/transform_broadcaster.h>
+#include <nav_msgs/msg/odometry.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include "common/so3_math.h"
+#include <tf2_ros/transform_broadcaster.h>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 
 #define USE_IKFOM
 
@@ -61,7 +61,7 @@ struct MeasureGroup {
   double lidar_beg_time;
   double lidar_end_time;
   PointCloudXYZI::Ptr lidar;
-  std::deque<sensor_msgs::Imu::ConstPtr> imu;
+  std::deque<std::shared_ptr<const sensor_msgs::msg::Imu>> imu;
 
   inline V3D getMeanAcc() {
     V3D mean_acc(Zero3d);

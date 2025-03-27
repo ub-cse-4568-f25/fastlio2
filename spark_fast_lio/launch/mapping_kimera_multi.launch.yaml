@@ -1,0 +1,47 @@
+---
+launch:
+  - arg: {name: start_rviz, default: 'true', description: automatically start rviz}
+  - arg: {name: rviz_path, default: $(find-pkg-share spark_fast_lio)/rviz/rviz2.rviz, description: rviz file to load}
+
+  - arg: {name: save_dir,      default: '',     description: 'Directory to save logs' }
+  - arg: {name: sequence_name, default: '12_08_acl_jackal2', description: 'Sequence name' }
+  - arg: {name: robot_name,    default: 'acl_jackal2', description: 'Robot name / namespace' }
+  - arg: {name: config_path,   default: $(find-pkg-share spark_fast_lio)/config/kimera_multi/$(var robot_name).yaml, description: Model-specific configuration}
+
+  # - group:
+  #     ns: "$(var robot_name)"
+  #     children:
+
+  - node:
+      namespace: $(var robot_name)
+      pkg: spark_fast_lio
+      exec: spark_lio_mapping
+      name: lio_mapping
+      output: screen
+      on_exit: shutdown
+
+      remap:
+        - { from: 'lio_mapping/lidar', to: 'lidar_points' }
+        - { from: 'lio_mapping/imu',   to: 'imu/data'   }
+
+      param:
+        - name: "common/save_dir"
+          value: "$(var save_dir)"
+        - name: "common/sequence_name"
+          value: "$(var sequence_name)"
+        - name: "common/robot_name"
+          value: "$(var robot_name)"
+
+
+        # - "$(find-pkg-share spark_fast_lio)/config/kimera_multi/$(var robot_name).yaml"
+
+  - node:
+      if: $(var start_rviz)
+      pkg: rviz2
+      exec: rviz2
+      name: "rviz"
+      launch-prefix: "nice"
+      output: "screen"
+      args: >
+        -d $(var rviz_path)
+      # args: ["-d", "$(find-pkg-share spark_fast_lio)/rviz/kimera_multi/$(var robot_name).rviz"]

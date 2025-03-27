@@ -126,7 +126,8 @@ class esekf {
   typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> measurementModel_dyn(state &, bool &);
   // typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> measurementModel_dyn_share(state &,
   // dyn_share_datastruct<scalar_type> &);
-  typedef void measurementModel_dyn_share(state &, dyn_share_datastruct<scalar_type> &);
+  // typedef void measurementModel_dyn_share(state &, dyn_share_datastruct<scalar_type> &);
+  typedef std::function<void(state &, dyn_share_datastruct<scalar_type> &)> measurementModel_dyn_share;
   typedef Eigen::Matrix<scalar_type, l, n> measurementMatrix1(state &, bool &);
   typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, n> measurementMatrix1_dyn(state &, bool &);
   typedef Eigen::Matrix<scalar_type, l, measurement_noise_dof> measurementMatrix2(state &, bool &);
@@ -2015,7 +2016,7 @@ class esekf {
   measurementMatrix2_dyn *h_v_dyn;
 
   measurementModel_share *h_share;
-  measurementModel_dyn_share *h_dyn_share;
+  measurementModel_dyn_share h_dyn_share;
 
   int maximum_iter = 0;
   scalar_type limit[n];

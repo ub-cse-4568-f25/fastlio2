@@ -18,7 +18,7 @@ lio_mapping:
     gyr_cov: 0.1
     b_acc_cov: 0.003
     b_gyr_cov: 0.001
-    fov_degree:    180
+    fov_degree:    360
     det_range:     100.0
     extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
 #    extrinsic_T: [ 0.13, 0, 0.52]

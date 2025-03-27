@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.20)
 project(spark_fast_lio)
 
 set(CMAKE_BUILD_TYPE "Release")
@@ -37,52 +37,103 @@ find_package(OpenMP QUIET)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   ${OpenMP_C_FLAGS}")
 
-find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
-  nav_msgs
-  sensor_msgs
-  roscpp
-  rospy
-  std_msgs
-  pcl_ros
-  tf
-  eigen_conversions
-)
+find_package(ament_cmake REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(rcutils REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
 
 find_package(Eigen3 REQUIRED)
 set(PCL_FIND_QUIETLY ON)
-find_package(PCL 1.8 REQUIRED)
-
-message(STATUS Eigen: ${EIGEN3_INCLUDE_DIR})
 
 include_directories(
-  ${catkin_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
-  ${PCL_INCLUDE_DIRS}
   include
   third_party/ikd-Tree
   third_party/IKFoM_toolkit)
 
-catkin_package(
-  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs
-  DEPENDS EIGEN3 PCL
-  INCLUDE_DIRS
-)
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 #### for ikd-Tree
 add_library(ikd_tree third_party/ikd-Tree/ikd_Tree.cpp)
+# To resolve "recompile with -fPIC" issue
+set_target_properties(ikd_tree PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-#### main
-add_executable(spark_lio_mapping src/lio_mapping.cpp src/preprocess.cpp)
-target_link_libraries(spark_lio_mapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ikd_tree)
-# NOTE(nathan) ideally we would fix unitialized variables, but the lidar preprocessing is a mess
-target_compile_options(spark_lio_mapping PRIVATE -Wall -Wno-maybe-uninitialized)
-
+# Optional: Livox driver
 find_package(livox_ros_driver QUIET)
-if (livox_ros_driver_FOUND)
-  target_link_libraries(spark_lio_mapping ${livox_ros_driver_LIBRARIES})
-  target_include_directories(spark_lio_mapping ${livox_ros_driver_INCLUDE_DIRS})
-  add_definitions(-DLIVOX_ROS_DRIVER_FOUND=${livox_ros_driver_FOUND})
+
+# Create the library as a component
+add_library(spark_lio_component SHARED
+  src/spark_fast_lio.cpp
+  src/preprocess.cpp
+)
+
+# Example: C++ standard
+target_compile_features(spark_lio_component PUBLIC cxx_std_20)
+
+# Link external libs. Replace `ikd_tree` with your actual library name
+target_link_libraries(spark_lio_component
+  ${PCL_LIBRARIES}
+  ikd_tree
+)
+
+# If Livox found, link it here
+if(livox_ros_driver_FOUND)
+  target_link_libraries(spark_lio_component
+    ${livox_ros_driver_LIBRARIES}
+  )
+  target_include_directories(spark_lio_component PRIVATE
+    ${livox_ros_driver_INCLUDE_DIRS}
+  )
+  target_compile_definitions(spark_lio_component PRIVATE
+    -DLIVOX_ROS_DRIVER_FOUND=${livox_ros_driver_FOUND}
+  )
 else()
   message(STATUS "Missing livox driver! AVIA Lidar will be disabled!")
 endif()
+
+# Pull in ament dependencies
+ament_target_dependencies(
+  spark_lio_component
+  rclcpp
+  rclcpp_components
+  sensor_msgs
+  nav_msgs
+  geometry_msgs
+  tf2_ros
+  tf2_eigen
+  pcl_conversions
+)
+
+rclcpp_components_register_node(
+  spark_lio_component
+  PLUGIN "spark_fast_lio::SPARKFastLIO2"
+  EXECUTABLE spark_lio_mapping
+)
+
+# Install
+install(
+  TARGETS spark_lio_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+# Example for installing launch files, etc.
+install(DIRECTORY launch config rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Generate package info
+ament_package()
