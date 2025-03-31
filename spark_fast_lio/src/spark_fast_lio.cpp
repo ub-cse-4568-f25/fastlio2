@@ -38,17 +38,17 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   map_file_path_ = declare_parameter<std::string>("map_file_path", "");
   save_dir_      = declare_parameter<std::string>("common.save_dir", "");
   sequence_name_ = declare_parameter<std::string>("common.sequence_name", "");
-  map_frame_     = declare_parameter<std::string>("common.map_frame", "map");
+  map_frame_     = declare_parameter<std::string>("common.map_frame", "odom");
   lidar_frame_   = declare_parameter<std::string>("common.lidar_frame", "lidar");
   base_frame_    = declare_parameter<std::string>("common.base_frame", "");
-  imu_frame_     = declare_parameter<std::string>("common.imu_frame", "base");
+  imu_frame_     = declare_parameter<std::string>("common.imu_frame", "imu");
   viz_frame_     = declare_parameter<std::string>("common.visualization_frame", "imu");
   time_sync_en_  = declare_parameter<bool>("common.time_sync_en", false);
 
   filter_size_map_min_ = declare_parameter<double>("filter_size_map", 0.5);
   cube_len_            = declare_parameter<double>("cube_side_length", 200.0);
   det_range_           = declare_parameter<double>("mapping.det_range", 300.0);
-  fov_deg_             = declare_parameter<double>("mapping.fov_degree", 180.0);
+  fov_deg_             = declare_parameter<double>("mapping.fov_degree", 360.0);
   gyr_cov_             = declare_parameter<double>("mapping.gyr_cov", 0.1);
   acc_cov_             = declare_parameter<double>("mapping.acc_cov", 0.1);
   b_gyr_cov_           = declare_parameter<double>("mapping.b_gyr_cov", 0.0001);
@@ -117,7 +117,6 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
       declare_parameter<int>("preprocess.timestamp_unit", static_cast<int>(US));
   preprocessor_->SCAN_RATE        = declare_parameter<int>("preprocess.scan_rate", 10);
   preprocessor_->point_filter_num = declare_parameter<int>("point_filter_num_for_preprocessing", 1);
-  preprocessor_->feature_enabled  = declare_parameter<bool>("feature_extract_enable", false);
 
   imu_processor_ = std::make_shared<ImuProcess>();
   if (extrinT_.size() == 3 && extrinR_.size() == 9) {
@@ -159,6 +158,12 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
 
   main_loop_timer_ =
       create_wall_timer(std::chrono::milliseconds(1), std::bind(&SPARKFastLIO2::main, this));
+
+  if ((preprocessor_->point_filter_num != 1 && point_filter_num_ > 1)) {
+    RCLCPP_WARN(this->get_logger(),
+                "Points may be too sparse. Set 'preprocessor_->point_filter_num = 1' and tune "
+                "'point_filter_num_' instead.");
+  }
 
   RCLCPP_INFO(get_logger(), "SPARKFastLIO2 constructed");
 }
@@ -489,11 +494,13 @@ void SPARKFastLIO2::lasermapFovSegment() {
   kdtree_delete_counter_ = 0;
   kdtree_delete_time_    = 0.0;
   pointBodyToWorld(xaxis_point_body_, xaxis_point_world_);
-  V3D pos_LiD = pos_lidar_;
+
+  // `lidar_xyz`: LiDAR position w.r.t. world frame
+  V3D lidar_xyz = kf_.get_lidar_position();
   if (!localmap_initialized) {
     for (int i = 0; i < 3; i++) {
-      localmap_points_.vertex_min[i] = pos_LiD(i) - cube_len_ / 2.0;
-      localmap_points_.vertex_max[i] = pos_LiD(i) + cube_len_ / 2.0;
+      localmap_points_.vertex_min[i] = lidar_xyz(i) - cube_len_ / 2.0;
+      localmap_points_.vertex_max[i] = lidar_xyz(i) + cube_len_ / 2.0;
     }
     localmap_initialized = true;
     return;
@@ -502,8 +509,8 @@ void SPARKFastLIO2::lasermapFovSegment() {
   float dist_to_map_edge[3][2];
   bool need_move = false;
   for (int i = 0; i < 3; i++) {
-    dist_to_map_edge[i][0] = fabs(pos_LiD(i) - localmap_points_.vertex_min[i]);
-    dist_to_map_edge[i][1] = fabs(pos_LiD(i) - localmap_points_.vertex_max[i]);
+    dist_to_map_edge[i][0] = fabs(lidar_xyz(i) - localmap_points_.vertex_min[i]);
+    dist_to_map_edge[i][1] = fabs(lidar_xyz(i) - localmap_points_.vertex_max[i]);
     if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * det_range_ ||
         dist_to_map_edge[i][1] <= MOV_THRESHOLD * det_range_)
       need_move = true;
@@ -625,6 +632,18 @@ void SPARKFastLIO2::publishOdometry() {
 
   // publish
   pub_odom_->publish(odomAftMapped_);
+
+  geometry_msgs::msg::TransformStamped transform_stamped;
+  transform_stamped.header.stamp    = odomAftMapped_.header.stamp;
+  transform_stamped.header.frame_id = map_frame_;
+  transform_stamped.child_frame_id  = odomAftMapped_.child_frame_id;
+
+  transform_stamped.transform.translation.x = odomAftMapped_.pose.pose.position.x;
+  transform_stamped.transform.translation.y = odomAftMapped_.pose.pose.position.y;
+  transform_stamped.transform.translation.z = odomAftMapped_.pose.pose.position.z;
+  transform_stamped.transform.rotation      = odomAftMapped_.pose.pose.orientation;
+
+  tf_broadcaster_->sendTransform(transform_stamped);
 }
 
 void SPARKFastLIO2::publishPath() {
@@ -874,7 +893,6 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   }
 
   state_point_ = kf_.get_x();
-  pos_lidar_   = state_point_.pos + state_point_.rot * state_point_.offset_T_L_I;
 
   if (feats_undistort_->empty() || (feats_undistort_ == NULL)) {
     RCLCPP_WARN_STREAM(this->get_logger(), "No point, skip this scan!\n");
@@ -929,8 +947,6 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   normvec_->resize(feats_down_size_);
   feats_down_world_->resize(feats_down_size_);
 
-  V3D ext_euler = SO3ToEuler(state_point_.offset_R_L_I);
-
   nearest_points_.resize(feats_down_size_);
 
   /*** iterated state estimation ***/
@@ -979,12 +995,6 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   // Update corrected rotation here
   state_point_.pos = R_gravity_aligned_ * state_point_.pos;
   state_point_.rot = R_gravity_aligned_ * state_point_.rot;
-  euler_cur_       = SO3ToEuler(state_point_.rot);
-  pos_lidar_       = state_point_.pos + state_point_.rot * state_point_.offset_T_L_I;
-  geoQuat_.x       = state_point_.rot.coeffs()[0];
-  geoQuat_.y       = state_point_.rot.coeffs()[1];
-  geoQuat_.z       = state_point_.rot.coeffs()[2];
-  geoQuat_.w       = state_point_.rot.coeffs()[3];
 
   if (enable_gravity_alignment_ && !is_gravity_aligned_ && !base_frame_.empty()) {
     RCLCPP_WARN(get_logger(),

@@ -127,7 +127,8 @@ class esekf {
   // typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> measurementModel_dyn_share(state &,
   // dyn_share_datastruct<scalar_type> &);
   // typedef void measurementModel_dyn_share(state &, dyn_share_datastruct<scalar_type> &);
-  typedef std::function<void(state &, dyn_share_datastruct<scalar_type> &)> measurementModel_dyn_share;
+  typedef std::function<void(state &, dyn_share_datastruct<scalar_type> &)>
+      measurementModel_dyn_share;
   typedef Eigen::Matrix<scalar_type, l, n> measurementMatrix1(state &, bool &);
   typedef Eigen::Matrix<scalar_type, Eigen::Dynamic, n> measurementMatrix1_dyn(state &, bool &);
   typedef Eigen::Matrix<scalar_type, l, measurement_noise_dof> measurementMatrix2(state &, bool &);
@@ -1988,6 +1989,11 @@ class esekf {
   }
 
   void change_P(cov &input_cov) { P_ = input_cov; }
+
+  const MTK::vect<3, double> get_lidar_position() const {
+    // W_T_I * I_T_L -> W_T_L
+    return x_.pos + x_.rot * x_.offset_T_L_I;
+  }
 
   const state &get_x() const { return x_; }
   const cov &get_P() const { return P_; }

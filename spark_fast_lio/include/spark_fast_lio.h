@@ -103,10 +103,11 @@ class SPARKFastLIO2 : public rclcpp::Node {
       out.pose.position.x    = state_point_.pos(0);
       out.pose.position.y    = state_point_.pos(1);
       out.pose.position.z    = state_point_.pos(2);
-      out.pose.orientation.x = geoQuat_.x;
-      out.pose.orientation.y = geoQuat_.y;
-      out.pose.orientation.z = geoQuat_.z;
-      out.pose.orientation.w = geoQuat_.w;
+      const auto quat        = state_point_.rot.coeffs();
+      out.pose.orientation.x = quat[0];
+      out.pose.orientation.y = quat[1];
+      out.pose.orientation.z = quat[2];
+      out.pose.orientation.w = quat[3];
     } else if (frame == "lidar") {
       auto [position, orientation] = transformPoseWrtLidarFrame();
       out.pose.position.x          = position(0);
@@ -294,7 +295,6 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   V3F xaxis_point_body_;
   V3F xaxis_point_world_;
-  V3D euler_cur_;
   V3D g_base_;
   V3D mean_acc_stopped_;
   V3D position_last_;
@@ -310,11 +310,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
   MeasureGroup Measures_;
   esekfom::esekf<state_ikfom, 12, input_ikfom> kf_;
   state_ikfom state_point_;
-  vect3 pos_lidar_;
 
   nav_msgs::msg::Path path_msg_;
   nav_msgs::msg::Odometry odomAftMapped_;
-  geometry_msgs::msg::Quaternion geoQuat_;
   geometry_msgs::msg::PoseStamped msg_body_pose_;
 
   std::shared_ptr<Preprocess> preprocessor_;

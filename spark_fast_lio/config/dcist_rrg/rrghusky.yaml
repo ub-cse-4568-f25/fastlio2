@@ -50,7 +50,6 @@
       # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
 
     verbose: true
-    feature_extract_enable: false
     runtime_pos_log_enable: false
     point_filter_num_for_preprocessing: 1 # If it is set to `1`, full point cloud gonna be publlished
     point_filter_num: 4                   # For pose estimation.
