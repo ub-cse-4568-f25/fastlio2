@@ -1,42 +1,65 @@
-# FAST-LIO2 for Kimera-Multi Dataset and DCIST Project
+<div align="center">
+    <h1>SPARK-FAST-LIO2</h1>
+    <a href="https://github.com/MIT-SPARK/spark-fast-lio2"><img src="https://img.shields.io/badge/-C++-blue?logo=cplusplus" /></a>
+    <a href="https://github.com/MIT-SPARK/spark-fast-lio2"><img src="https://img.shields.io/badge/ROS2-Jazzy-blue" /></a>
+    <a href="https://github.com/MIT-SPARK/spark-fast-lio2"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
+    <a href="https://arxiv.org/abs/2409.15615"><img src="https://img.shields.io/badge/arXiv-b33737?logo=arXiv" /></a>
+    <br />
+    <br />
+  <br />
+  <br />
+  <p align="center"><img src="https://github.com/user-attachments/assets/763bafef-c11a-4412-a9f7-f138fc12ff9f" alt="KISS Matcher" width="95%"/></p>
+  <p><strong><em>LiDAR mapping = SPARK-FAST-LIO2 + <a href="https://github.com/MIT-SPARK/KISS-Matcher/tree/main/ros">KISS-Matcher-SAM</a></em></strong></p>
+</div>
 
-- Original: [FAST-LIO2](https://github.com/hku-mars/FAST_LIO)
+______________________________________________________________________
+
+## :package: Installation
 
 ## How to build
 
 Put the code in your workspace/src folder
 
 ```shell
-cd ${YOUR_WORKSPACE}/src
-git clone git@github.mit.edu:SPARK/spark_fast_lio.git
-catkin build -DCMAKE_BUILD_TYPE=Release
+cd ${YOUR_COLCON_WORKSPACE}/src
+git clone https://github.com/MIT-SPARK/spark-fast-lio2.git
+colcon build --packages-up-to spark_fast_lio
 ```
 
-## How to use
+## How to run
 
-- Then run
+We provide two out-of-the-box ROS2 examples
 
-```shell
-roslaunch spark_fast_lio mapping_ouster.launch
-roslaunch spark_fast_lio mapping_velodyne.launch
-roslaunch spark_fast_lio mapping_livox.launch
-```
-
-Especially, in the **Kimera-Multi** dataset,
+### 🏟️ Construct your colosseum
 
 ```
-roslaunch spark_fast_lio mapping_${ROBOT_NAME}.launch save_dir:=${DIRECTORY} sequence_name:="${DATE}_{ROBOT_NAME}" robot_name:="${ROBOT_NAME}"
+ros2 launch spark_fast_lio mapping_vbr_colosseo.launch.yaml
 ```
 
-E.g.,
+### 🇺🇸 Construct MIT campus
 
 ```
-roslaunch spark_fast_lio mapping_kimera_multi.launch save_dir:=/home/shapelim/tmp sequence_name:="10_14_acl_jackal2_tmp" robot_name:="acl_jackal2"
+ros2 launch spark_fast_lio mapping_mit_campus.launch.yaml scene_id:=acl_jackal
 ```
 
-Note, `save_dir` and `sequence_name` are only for the saving trajectory purpose. So you can ignore it.
+### How to run `spark-fast-lio2` using your own ROS2 bag?
+
+1. Copy `config/velodyne_mit.yaml` or `config/ouster_vbr.yaml` to `config/${YOUR_CONFIG}.yaml`, and set the appropriate values for:
+   - `lidar_type`, `scan_line`, `timestamp_unit`, and `filter_size_map` depending on your sensor type
+   - `extrinsic_T` and `extrinsic_R` (it's LiDAR w.r.t. IMU, i.e., `extrinsic * cloud w.r.t. LiDAR ->  cloud w.r.t. IMU`)
+1. Configure your launch file and remap the lidar and imu topic names to match your setup.
+   - Also set an appropriate rviz setup
+1. Run your launch file, for example: `ros2 launch spark_fast_lio ${YOUR_LAUNCH}.launch.yaml`
+
+### How to run with [KISS-Matcher-SAM](https://github.com/MIT-SPARK/KISS-Matcher/tree/main/ros)?
+
+TBU
 
 ______________________________________________________________________
+
+## What's new? Key features and updates
+
+TBU
 
 For **DCIST** project,
 
@@ -82,3 +105,9 @@ To substitute LOCUS with SPARK-FAST-LIO, you can easily do it by using the follo
        <arg name="robot_name" value="$(arg robot_name)"/>
    </include>
 ```
+
+______________________________________________________________________
+
+## Acknowledgement
+
+Thanks for [HKU MaRS Lab](https://mars.hku.hk/) guys. The original code can be found [here](https://github.com/hku-mars/FAST_LIO)
