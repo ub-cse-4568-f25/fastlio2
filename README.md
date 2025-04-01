@@ -90,7 +90,8 @@ ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml
    However, if you want to run it on your own dataset, make sure to set the /cloud and /odom topics appropriately using:
 
 ```
-ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml odom_topic:=<YOUR_TOPIC> scan_topic:=<YOUR_TOPIC>
+ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml \
+  odom_topic:=<YOUR_TOPIC> scan_topic:=<YOUR_TOPIC>
 ```
 
 ______________________________________________________________________
