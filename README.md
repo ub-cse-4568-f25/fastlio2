@@ -23,20 +23,20 @@ colcon build --packages-up-to spark_fast_lio
 
 ## 🚀 How to Run
 
-We provide **two out-of-the-box ROS2** examples using pre-proceessed ROS2 bag data (because the original data are only available in ROS1).
+We provide **two out-of-the-box ROS2** examples using pre-processed ROS2 bag data (because the original data are only available in ROS1).
 All pre-processed ROS2 bag files can be found [here](https://www.dropbox.com/scl/fo/i56kucdzxpzq1mr5jula7/ALJpdqvOZT1hTaQXEePCvyI?rlkey=y5bvslyazf09erko7gl0aylll&st=dh91zyho&dl=0).
 
 ### 🇺🇸 Construct MIT campus
 
 1. Download `10_14_acl_jackal` and `10_14_hathor` (from the [Kimer-Multi dataset](https://github.com/MIT-SPARK/Kimera-Multi-Data))
 
-1. Run `spark_fast_lio` using following command:
+1. Run `spark_fast_lio` using the following command:
 
 ```
 ros2 launch spark_fast_lio mapping_mit_campus.launch.yaml scene_id:=acl_jackal
 ```
 
-3. In another terminal, run ROS2 bag file as follow:
+3. In another terminal, run ROS2 bag file as follows:
 
 ```
 ros2 bag play 10_14_acl_jackal
@@ -46,13 +46,13 @@ ros2 bag play 10_14_acl_jackal
 
 1. Download `colosse_train0` (from the [VBR dataset](https://github.com/rvp-group/vbr-devkit))
 
-1. Run `spark_fast_lio` using following command:
+1. Run `spark_fast_lio` using the following command:
 
 ```
 ros2 launch spark_fast_lio mapping_vbr_colosseo.launch.yaml
 ```
 
-3. In another terminal, run ROS2 bag file as follow:
+3. In another terminal, run ROS2 bag file as follows:
 
 ```
 ros2 bag play colosseo_train0
@@ -69,12 +69,14 @@ ros2 bag play colosseo_train0
 
 ### How to run with [KISS-Matcher-SAM](https://github.com/MIT-SPARK/KISS-Matcher/tree/main/ros)?
 
-Please read \[README.md\] of KISS-Matecher-SAM before running the command.
+Please carefully read [README.md](https://github.com/MIT-SPARK/KISS-Matcher/blob/main/ros/README.md) of KISS-Matcher-SAM before running the command.
 
 1. To install `kiss_matcher_ros` in your colcon workspace, run:
 
 ```bash
-cd ${ROS2_WORKSPACE}
+cd ${YOUR_ROS2_WORKSPACE}/src
+git clone https://github.com/MIT-SPARK/KISS-Matcher.git
+cd ..
 colcon build --packages-select kiss_matcher_ros
 ```
 
@@ -85,7 +87,7 @@ ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml
 ```
 
 3. By default, this setup is compatible with the two examples above (i.e., the topics are already remapped to support them).
-   However, if you want to run it on your own dataset, make sure to set the /cloud and /odom topics appropriately using:
+   However, if you want to run it on your own dataset, make sure to set the `/cloud` and `/odom` topics appropriately using:
 
 ```
 ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml \
@@ -106,4 +108,4 @@ ______________________________________________________________________
 
 ## Acknowledgement
 
-Thanks for [HKU MaRS Lab](https://mars.hku.hk/) guys. The original code is from FAST-LIO2, which can be found [here](https://github.com/hku-mars/FAST_LIO).
+Thanks to [HKU MaRS Lab](https://mars.hku.hk/) guys. The original code is from FAST-LIO2, which can be found [here](https://github.com/hku-mars/FAST_LIO).
