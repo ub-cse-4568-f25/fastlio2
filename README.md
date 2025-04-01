@@ -11,9 +11,7 @@
 
 ______________________________________________________________________
 
-## :package: Installation
-
-## How to build
+## :package: How to Install
 
 Put the code in your workspace/src folder
 
@@ -23,7 +21,7 @@ git clone https://github.com/MIT-SPARK/spark-fast-lio.git
 colcon build --packages-up-to spark_fast_lio
 ```
 
-## How to run
+## 🚀 How to Run
 
 We provide **two out-of-the-box ROS2** examples using pre-proceessed ROS2 bag data (because the original data are only available in ROS1).
 All pre-processed ROS2 bag files can be found [here](https://www.dropbox.com/scl/fo/i56kucdzxpzq1mr5jula7/ALJpdqvOZT1hTaQXEePCvyI?rlkey=y5bvslyazf09erko7gl0aylll&st=dh91zyho&dl=0).
@@ -60,7 +58,7 @@ ros2 launch spark_fast_lio mapping_vbr_colosseo.launch.yaml
 ros2 bag play colosseo_train0
 ```
 
-### 🚀 How to run `spark-fast-lio2` using your own ROS2 bag?
+### 🔧 How to run `spark-fast-lio2` using your own ROS2 bag?
 
 1. Copy `config/velodyne_mit.yaml` or `config/ouster_vbr.yaml` to `config/${YOUR_CONFIG}.yaml`, and set the appropriate values for:
    - `lidar_type`, `scan_line`, `timestamp_unit`, and `filter_size_map` depending on your sensor type
@@ -96,7 +94,7 @@ ros2 launch kiss_matcher_ros run_kiss_matcher_sam.launch.yaml \
 
 ______________________________________________________________________
 
-## What's new? Key features and updates
+## What's New? Key Features and Updates
 
 1. Complete code refactoring for better structure and readability
 
