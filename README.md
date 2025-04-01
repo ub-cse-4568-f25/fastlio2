@@ -26,7 +26,7 @@ colcon build --packages-up-to spark_fast_lio
 We provide **two out-of-the-box ROS2** examples using pre-processed ROS2 bag data (because the original data are only available in ROS1).
 All pre-processed ROS2 bag files can be found [here](https://www.dropbox.com/scl/fo/i56kucdzxpzq1mr5jula7/ALJpdqvOZT1hTaQXEePCvyI?rlkey=y5bvslyazf09erko7gl0aylll&st=dh91zyho&dl=0).
 
-### 🇺🇸 Construct MIT campus
+### 🇺🇸 LIO on the MIT campus
 
 1. Download `10_14_acl_jackal` and `10_14_hathor` (from the [Kimer-Multi dataset](https://github.com/MIT-SPARK/Kimera-Multi-Data))
 
@@ -42,7 +42,7 @@ ros2 launch spark_fast_lio mapping_mit_campus.launch.yaml scene_id:=acl_jackal
 ros2 bag play 10_14_acl_jackal
 ```
 
-### 🏟️ Construct your colosseum
+### 🏟️ LIO on the Colosseum
 
 1. Download `colosse_train0` (from the [VBR dataset](https://github.com/rvp-group/vbr-devkit))
 
