@@ -1,21 +1,8 @@
 apis/lio_mapping:
   ros__parameters:
-    common:
-      lid_topic: "/apis/lidar_points"
-      imu_topic: "/apis/forward/imu"
-      time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-      map_frame: "apis/odom"
-      lidar_frame: "apis/ouster_link"
-      # NOTE: 'base_frame': It's the robot's base frame for integration with the Hydra system.
-      base_frame: "apis/base"                  # extrsincis should be given by tf message
-      imu_frame: "camera_imu_optical_frame"
-
-      visualization_frame: "base" # "lidar", "base", or "imu" (default: "imu", but for run Hydra, it should be "base")
-
     preprocess:
-                                  # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
-      lidar_type: 4               # 4 for ouster LiDAR in Kimera-Multi dataset (KMOUST64)
-
+      lidar_type: 4               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+                                  # 4 for ouster LiDAR in Kimera-Multi dataset (KMOUST64)
       scan_line: 64
       scan_rate: 10               # only need to be set for Ouster, unit: Hz,
       timestamp_unit: 3           # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
@@ -38,12 +25,11 @@ apis/lio_mapping:
                     9.9884501122e-01, 1.8592458123e-02, -4.4315894748e-02 ]
 
 
-      # extrinsics OS1-64 w.r.t. Ouster IMU. But in the current Kimera-Multi, there's no IMU from Ouster.
+    # extrinsics OS1-64 w.r.t. Ouster IMU. But in the current Kimera-Multi, there's no IMU from Ouster.
     #  extrinsic_T: [ 0.006, -0.012, 0.029 ]
     #  extrinsic_R: [ -1.0, 0.0, 0.0,
     #                 0.0, -1.0, 0.0,
     #                 0.0, 0.0, 1.0 ]
-
 
     filter_size_map: 0.3
 
@@ -61,7 +47,7 @@ apis/lio_mapping:
       interval: -1                 # how many LiDAR frames saved in each pcd file;
       # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
 
-    runtime_pos_log_enable: false
+    verbose: false
     point_filter_num_for_preprocessing: 1 # If it is set to `1`, full point cloud gonna be publlished
     point_filter_num: 4                   # For pose estimation.
     max_iteration: 4
