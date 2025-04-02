@@ -8,8 +8,8 @@ launch:
   - arg: {name: map_frame, default: 'odom'}
   - arg: {name: base_frame, default: 'base'}
 
-  - arg: {name: rviz_path,   default: $(find-pkg-share spark_fast_lio)/rviz/velodyne_mit.rviz, description: rviz file to load}
-  - arg: {name: config_path, default: $(find-pkg-share spark_fast_lio)/config/velodyne_mit.yaml, description: Model-specific configuration}
+  # TODO(hlim): To be generalized
+  - arg: {name: config_path, default: $(find-pkg-share spark_fast_lio)/config/acl_jackal2.yaml, description: Model-specific configuration}
 
   - node:
       namespace: $(var scene_id)
@@ -48,9 +48,10 @@ launch:
       launch-prefix: "nice"
       output: "screen"
       args: >
-        -d $(var rviz_path)
+        -d $(find-pkg-share spark_fast_lio)/rviz/kimera_multi/$(var scene_id).rviz
 
   - executable:
       # To transform odom frame (child_frame_id) to the base frame (frame_id)
       # x y z roll pitch yaw order
+      # TODO(hlim): To be changed to the actual base frame
       cmd: "ros2 run tf2_ros static_transform_publisher 0.0 0.0 0.0 3.1416 0.0 -1.5708 $(var scene_id)/$(var base_frame) $(var scene_id)/$(var map_frame)"
