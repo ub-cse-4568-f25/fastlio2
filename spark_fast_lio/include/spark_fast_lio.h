@@ -42,6 +42,8 @@ class SPARKFastLIO2 : public rclcpp::Node {
  private:
   M3D computeRelativeRotation(const Eigen::Vector3d &g_a, const Eigen::Vector3d &g_b);
 
+  bool lookupBaseExtrinsics(V3D &lidar_T_wrt_base, M3D &lidar_R_wrt_base);
+
   void pointBodyToWorld(PointType const *const pi, PointType *const po, state_ikfom &s);
 
   void pointBodyToWorld(PointType const *const pi, PointType *const po);

@@ -156,6 +156,13 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   corr_normvec_.reset(new PointCloudXYZI(100000, 1));
   cloud_to_be_saved_.reset(new PointCloudXYZI());
 
+  if (!base_frame_.empty()) {
+    if (!lookupBaseExtrinsics(lidar_T_wrt_base_, lidar_R_wrt_base_)) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to lookup transform.");
+      return;
+    }
+  }
+
   main_loop_timer_ =
       create_wall_timer(std::chrono::milliseconds(1), std::bind(&SPARKFastLIO2::main, this));
 
@@ -202,6 +209,69 @@ M3D SPARKFastLIO2::computeRelativeRotation(const Eigen::Vector3d &g_a, const Eig
 
     return q.toRotationMatrix();
   }
+}
+
+bool SPARKFastLIO2::lookupBaseExtrinsics(V3D &lidar_T_wrt_base, M3D &lidar_R_wrt_base) {
+  RCLCPP_INFO(this->get_logger(),
+              "Looking up transform from %s -> %s",
+              base_frame_.c_str(),
+              lidar_frame_.c_str());
+
+  const auto lookup_time = rclcpp::Time(0);
+  bool has_transform     = false;
+  std::string err_str;
+  auto start_time          = this->now();
+  rclcpp::Duration timeout = rclcpp::Duration::from_seconds(10.0);
+  rclcpp::Rate rate(10.0);  // Just 10 Hz works
+
+  while (rclcpp::ok()) {
+    if (tf_buffer_->canTransform(
+            base_frame_, lidar_frame_, lookup_time, tf2::durationFromSec(0.0), &err_str)) {
+      RCLCPP_INFO_STREAM(this->get_logger(), "\033[1;32mExtrinsics detected.\033[1;0m");
+      has_transform = true;
+      break;
+    }
+
+    if ((this->now() - start_time) > timeout) {
+      RCLCPP_ERROR_STREAM(this->get_logger(),
+                          "Timeout after "
+                              << timeout.seconds() << " seconds waiting for transform from '"
+                              << lidar_frame_ << "' to '" << base_frame_ << "': " << err_str);
+      break;
+    }
+    rate.sleep();
+  }
+
+  if (!has_transform) {
+    return has_transform;
+  }
+
+  const auto &transform = tf_buffer_->lookupTransform(base_frame_, lidar_frame_, lookup_time);
+  lidar_T_wrt_base(0)   = transform.transform.translation.x;
+  lidar_T_wrt_base(1)   = transform.transform.translation.y;
+  lidar_T_wrt_base(2)   = transform.transform.translation.z;
+
+  Eigen::Quaterniond q(transform.transform.rotation.w,
+                       transform.transform.rotation.x,
+                       transform.transform.rotation.y,
+                       transform.transform.rotation.z);
+
+  lidar_R_wrt_base = q.toRotationMatrix();
+
+  RCLCPP_INFO(this->get_logger(),
+              "Translation: [%.3f, %.3f, %.3f]",
+              lidar_T_wrt_base(0),
+              lidar_T_wrt_base(1),
+              lidar_T_wrt_base(2));
+
+  RCLCPP_INFO(this->get_logger(),
+              "Rotation (Quaternion): [%.3f, %.3f, %.3f, %.3f]",
+              q.x(),
+              q.y(),
+              q.z(),
+              q.w());
+
+  return has_transform;
 }
 
 void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi,

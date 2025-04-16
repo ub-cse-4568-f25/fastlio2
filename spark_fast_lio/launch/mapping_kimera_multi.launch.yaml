@@ -6,10 +6,13 @@ launch:
 
   # Frames
   - arg: {name: map_frame, default: 'odom'}
-  - arg: {name: base_frame, default: 'base'}
+  - arg: {name: base_frame, default: 'base_link'}
 
   # TODO(hlim): To be generalized
-  - arg: {name: config_path, default: $(find-pkg-share spark_fast_lio)/config/acl_jackal2.yaml, description: Model-specific configuration}
+  # - arg: {name: config_path, default: $(find-pkg-share spark_fast_lio)/config/kimera_multi/acl_jackal2.yaml, description: Model-specific configuration}
+  # - let:
+  #   name: config_path
+  #   value: $(find-pkg-share spark_fast_lio)/config/kimera_multi/$(var scene_id).yaml
 
   - node:
       namespace: $(var scene_id)
@@ -25,9 +28,9 @@ launch:
 
       param:
         - name: "common.lidar_frame"
-          value: "velodyne_link"
+          value: "$(var scene_id)/velodyne_link"
         - name: "common.imu_frame"
-          value: "forward_imu_optical_frame"
+          value: "$(var scene_id)/forward_imu_optical_frame"
         - name: "common.map_frame"
           value: "$(var scene_id)/$(var map_frame)"
         - name: "common.base_frame"
@@ -38,7 +41,7 @@ launch:
         - name: "gravity_alignment.enable_gravity_alignment"
           value: false
 
-        - from: $(var config_path)
+        - from: $(find-pkg-share spark_fast_lio)/config/kimera_multi/$(var scene_id).yaml
 
   - node:
       if: $(var start_rviz)
@@ -49,9 +52,3 @@ launch:
       output: "screen"
       args: >
         -d $(find-pkg-share spark_fast_lio)/rviz/kimera_multi/$(var scene_id).rviz
-
-  - executable:
-      # To transform odom frame (child_frame_id) to the base frame (frame_id)
-      # x y z roll pitch yaw order
-      # TODO(hlim): To be changed to the actual base frame
-      cmd: "ros2 run tf2_ros static_transform_publisher 0.0 0.0 0.0 3.1416 0.0 -1.5708 $(var scene_id)/$(var base_frame) $(var scene_id)/$(var map_frame)"
