@@ -51,9 +51,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
   template <typename T>
   void pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi, Eigen::Matrix<T, 3, 1> &po) const {
     V3D p_body(pi[0], pi[1], pi[2]);
-    V3D p_global(state_point_.rot *
-                     (state_point_.offset_R_L_I * p_body + state_point_.offset_T_L_I) +
-                 state_point_.pos);
+    V3D p_global(latest_state_.rot *
+                     (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
+                 latest_state_.pos);
 
     po[0] = p_global(0);
     po[1] = p_global(1);
@@ -102,10 +102,10 @@ class SPARKFastLIO2 : public rclcpp::Node {
   template <typename T>
   void setPoseStamp(T &out, const std::string &frame) const {
     if (frame == "imu") {
-      out.pose.position.x    = state_point_.pos(0);
-      out.pose.position.y    = state_point_.pos(1);
-      out.pose.position.z    = state_point_.pos(2);
-      const auto quat        = state_point_.rot.coeffs();
+      out.pose.position.x    = latest_state_.pos(0);
+      out.pose.position.y    = latest_state_.pos(1);
+      out.pose.position.z    = latest_state_.pos(2);
+      const auto quat        = latest_state_.rot.coeffs();
       out.pose.orientation.x = quat[0];
       out.pose.orientation.y = quat[1];
       out.pose.orientation.z = quat[2];
@@ -311,7 +311,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   /*** EKF inputs and output ***/
   MeasureGroup Measures_;
   esekfom::esekf<state_ikfom, 12, input_ikfom> kf_;
-  state_ikfom state_point_;
+  state_ikfom latest_state_;
 
   nav_msgs::msg::Path path_msg_;
   nav_msgs::msg::Odometry odomAftMapped_;

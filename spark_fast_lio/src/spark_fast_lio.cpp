@@ -288,8 +288,8 @@ void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi,
 
 void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(state_point_.rot * (state_point_.offset_R_L_I * p_body + state_point_.offset_T_L_I) +
-               state_point_.pos);
+  V3D p_global(latest_state_.rot * (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
+               latest_state_.pos);
 
   po->x         = p_global(0);
   po->y         = p_global(1);
@@ -299,8 +299,8 @@ void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi, PointType *const
 
 void SPARKFastLIO2::pclPointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(state_point_.rot * (state_point_.offset_R_L_I * p_body + state_point_.offset_T_L_I) +
-               state_point_.pos);
+  V3D p_global(latest_state_.rot * (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
+               latest_state_.pos);
 
   po->x         = p_global(0);
   po->y         = p_global(1);
@@ -310,7 +310,7 @@ void SPARKFastLIO2::pclPointBodyToWorld(PointType const *const pi, PointType *co
 
 void SPARKFastLIO2::pclPointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
   V3D p_body_lidar(pi->x, pi->y, pi->z);
-  V3D p_body_imu(state_point_.offset_R_L_I * p_body_lidar + state_point_.offset_T_L_I);
+  V3D p_body_imu(latest_state_.offset_R_L_I * p_body_lidar + latest_state_.offset_T_L_I);
 
   po->x         = p_body_imu(0);
   po->y         = p_body_imu(1);
@@ -330,7 +330,7 @@ void SPARKFastLIO2::pclPointBodyLidarToBase(PointType const *const pi, PointType
 
 void SPARKFastLIO2::pclPointIMUToLiDAR(PointType const *const pi, PointType *const po) {
   V3D p_body_imu(pi->x, pi->y, pi->z);
-  V3D p_body_lidar(state_point_.offset_R_L_I.inverse() * (p_body_imu - state_point_.offset_T_L_I));
+  V3D p_body_lidar(latest_state_.offset_R_L_I.inverse() * (p_body_imu - latest_state_.offset_T_L_I));
 
   po->x         = p_body_lidar(0);
   po->y         = p_body_lidar(1);
@@ -339,9 +339,9 @@ void SPARKFastLIO2::pclPointIMUToLiDAR(PointType const *const pi, PointType *con
 }
 
 void SPARKFastLIO2::pclPointIMUToBase(PointType const *const pi, PointType *const po) {
-  static const auto &offset_R_B_I = state_point_.offset_R_L_I * lidar_R_wrt_base_.inverse();
+  static const auto &offset_R_B_I = latest_state_.offset_R_L_I * lidar_R_wrt_base_.inverse();
   static const auto &offset_T_B_I =
-      -1 * offset_R_B_I * lidar_T_wrt_base_ + state_point_.offset_T_L_I;
+      -1 * offset_R_B_I * lidar_T_wrt_base_ + latest_state_.offset_T_L_I;
 
   V3D p_body_imu(pi->x, pi->y, pi->z);
   V3D p_body_base(offset_R_B_I.inverse() * (p_body_imu - offset_T_B_I));
@@ -832,11 +832,11 @@ void SPARKFastLIO2::publishFrame(
 std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtLidarFrame() const {
   // offset_A_B: transformation matrix of A w.r.t. B
   Eigen::Vector3d lidar_position =
-      state_point_.offset_R_L_I.inverse() *
-      (state_point_.rot * state_point_.offset_T_L_I + state_point_.pos - state_point_.offset_T_L_I);
+      latest_state_.offset_R_L_I.inverse() *
+      (latest_state_.rot * latest_state_.offset_T_L_I + latest_state_.pos - latest_state_.offset_T_L_I);
 
   Eigen::Quaterniond lidar_orientation =
-      state_point_.offset_R_L_I.inverse() * state_point_.rot * state_point_.offset_R_L_I;
+      latest_state_.offset_R_L_I.inverse() * latest_state_.rot * latest_state_.offset_R_L_I;
 
   return std::make_tuple(lidar_position, lidar_orientation);
 }
@@ -849,15 +849,15 @@ void SPARKFastLIO2::main() {
 
 std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtBaseFrame() const {
   static const Eigen::Matrix3d offset_R_B_I =
-      state_point_.offset_R_L_I * lidar_R_wrt_base_.inverse();
+      latest_state_.offset_R_L_I * lidar_R_wrt_base_.inverse();
   static const Eigen::Vector3d offset_T_B_I =
-      -offset_R_B_I * lidar_T_wrt_base_ + state_point_.offset_T_L_I;
+      -offset_R_B_I * lidar_T_wrt_base_ + latest_state_.offset_T_L_I;
 
   Eigen::Vector3d base_position =
-      offset_R_B_I.inverse() * (state_point_.rot * offset_T_B_I + state_point_.pos - offset_T_B_I);
+      offset_R_B_I.inverse() * (latest_state_.rot * offset_T_B_I + latest_state_.pos - offset_T_B_I);
 
   Eigen::Quaterniond base_orientation =
-      Eigen::Quaterniond(offset_R_B_I.inverse() * state_point_.rot * offset_R_B_I);
+      Eigen::Quaterniond(offset_R_B_I.inverse() * latest_state_.rot * offset_R_B_I);
 
   return std::make_tuple(base_position, base_orientation);
 }
@@ -962,7 +962,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
     }
   }
 
-  state_point_ = kf_.get_x();
+  latest_state_ = kf_.get_x();
 
   if (feats_undistort_->empty() || (feats_undistort_ == NULL)) {
     RCLCPP_WARN_STREAM(this->get_logger(), "No point, skip this scan!\n");
@@ -1029,7 +1029,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   // the gravity vectors are sufficiently updated.
   if (enable_gravity_alignment_ && !is_gravity_aligned_ && !base_frame_.empty() &&
       (num_consecutive_moving_frames > num_moving_frames_thr_)) {
-    static const auto &offset_R_I_B = lidar_R_wrt_base_ * state_point_.offset_R_L_I.inverse();
+    static const auto &offset_R_I_B = lidar_R_wrt_base_ * latest_state_.offset_R_L_I.inverse();
 
     // NOTE(hlim): Here, we don't need to normalize the scale of vectors
     V3D gravity_direction = kf_.get_x().grav;
@@ -1061,10 +1061,10 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
     }
   }
 
-  state_point_ = kf_.get_x();
+  latest_state_ = kf_.get_x();
   // Update corrected rotation here
-  state_point_.pos = R_gravity_aligned_ * state_point_.pos;
-  state_point_.rot = R_gravity_aligned_ * state_point_.rot;
+  latest_state_.pos = R_gravity_aligned_ * latest_state_.pos;
+  latest_state_.rot = R_gravity_aligned_ * latest_state_.rot;
 
   if (enable_gravity_alignment_ && !is_gravity_aligned_ && !base_frame_.empty()) {
     RCLCPP_WARN(this->get_logger(),
