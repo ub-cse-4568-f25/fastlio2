@@ -4,6 +4,10 @@ launch:
   - arg: {name: scene_id,   default: 'acl_jackal',  description: 'Scene name for input message topics' }
   - arg: {name: robot_name, default: 'acl_jackal2', description: 'The actual robot used when acquiring data' }
 
+  # Frames
+  - arg: {name: map_frame, default: 'odom'}
+  - arg: {name: base_frame, default: 'base'}
+
   - arg: {name: rviz_path,   default: $(find-pkg-share spark_fast_lio)/rviz/velodyne_mit.rviz, description: rviz file to load}
   - arg: {name: config_path, default: $(find-pkg-share spark_fast_lio)/config/velodyne_mit.yaml, description: Model-specific configuration}
 
@@ -23,10 +27,12 @@ launch:
           value: "$(var robot_name)/velodyne_link"
         - name: "common.imu_frame"
           value: "$(var robot_name)/forward_imu_optical_frame"
+        - name: "common.map_frame"
+          value: "$(var map_frame)"
         - name: "common.base_frame"
-          value: "base"
+          value: "$(var base_frame)"
         - name: "common.visualization_frame"
-          value: "base"
+          value: "$(var base_frame)"
 
         - name: "gravity_alignment.enable_gravity_alignment"
           value: false
@@ -46,4 +52,4 @@ launch:
   - executable:
       # To transform odom frame (child_frame_id) to the base frame (frame_id)
       # x y z roll pitch yaw order
-      cmd: "ros2 run tf2_ros static_transform_publisher 0.0 0.0 0.0 3.1416 0.0 -1.5708 base odom"
+      cmd: "ros2 run tf2_ros static_transform_publisher 0.0 0.0 0.0 3.1416 0.0 -1.5708 $(var base_frame) $(var map_frame)"
