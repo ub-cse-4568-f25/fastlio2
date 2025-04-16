@@ -86,32 +86,32 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   void mapIncremental();
 
-  void publishOdometry();
+  void publishOdometry(const state_ikfom& state);
 
-  void publishPath();
+  void publishPath(const state_ikfom& state);
 
   void publishFrameWorld(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud);
 
   void publishFrame(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud,
                     const std::string &frame);
 
-  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtLidarFrame() const;
+  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtLidarFrame(const state_ikfom& state) const;
 
-  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtBaseFrame() const;
+  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtBaseFrame(const state_ikfom& state) const;
 
   template <typename T>
-  void setPoseStamp(T &out, const std::string &frame) const {
+  void setPoseStamp(const state_ikfom&state, T &out, const std::string &frame) const {
     if (frame == "imu") {
-      out.pose.position.x    = latest_state_.pos(0);
-      out.pose.position.y    = latest_state_.pos(1);
-      out.pose.position.z    = latest_state_.pos(2);
-      const auto quat        = latest_state_.rot.coeffs();
+      out.pose.position.x    = state.pos(0);
+      out.pose.position.y    = state.pos(1);
+      out.pose.position.z    = state.pos(2);
+      const auto quat        = state.rot.coeffs();
       out.pose.orientation.x = quat[0];
       out.pose.orientation.y = quat[1];
       out.pose.orientation.z = quat[2];
       out.pose.orientation.w = quat[3];
     } else if (frame == "lidar") {
-      auto [position, orientation] = transformPoseWrtLidarFrame();
+      auto [position, orientation] = transformPoseWrtLidarFrame(state);
       out.pose.position.x          = position(0);
       out.pose.position.y          = position(1);
       out.pose.position.z          = position(2);
@@ -120,7 +120,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
       out.pose.orientation.z       = orientation.z();
       out.pose.orientation.w       = orientation.w();
     } else if (frame == "base") {
-      auto [position, orientation] = transformPoseWrtBaseFrame();
+      auto [position, orientation] = transformPoseWrtBaseFrame(state);
       out.pose.position.x          = position(0);
       out.pose.position.y          = position(1);
       out.pose.position.z          = position(2);

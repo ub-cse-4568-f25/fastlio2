@@ -672,11 +672,11 @@ void SPARKFastLIO2::mapIncremental() {
   kdtree_incremental_time_ = omp_get_wtime() - st_time;
 }
 
-void SPARKFastLIO2::publishOdometry() {
+void SPARKFastLIO2::publishOdometry(const state_ikfom& state) {
   odomAftMapped_.header.frame_id = map_frame_;
   odomAftMapped_.header.stamp    = rclcpp::Time(lidar_end_time_ * 1e9);
 
-  setPoseStamp(odomAftMapped_.pose, viz_frame_);  // our template function
+  setPoseStamp(state, odomAftMapped_.pose, viz_frame_);  // our template function
 
   if (viz_frame_ == "lidar") {
     odomAftMapped_.child_frame_id = lidar_frame_;
@@ -716,8 +716,8 @@ void SPARKFastLIO2::publishOdometry() {
   tf_broadcaster_->sendTransform(transform_stamped);
 }
 
-void SPARKFastLIO2::publishPath() {
-  setPoseStamp(msg_body_pose_, viz_frame_);
+void SPARKFastLIO2::publishPath(const state_ikfom& state) {
+  setPoseStamp(state, msg_body_pose_, viz_frame_);
   msg_body_pose_.header.stamp    = rclcpp::Time(lidar_end_time_ * 1e9);
   msg_body_pose_.header.frame_id = map_frame_;
 
@@ -829,14 +829,14 @@ void SPARKFastLIO2::publishFrame(
   publish_count_ -= PUBFRAME_PERIOD;
 }
 
-std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtLidarFrame() const {
+std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtLidarFrame(const state_ikfom& state) const {
   // offset_A_B: transformation matrix of A w.r.t. B
   Eigen::Vector3d lidar_position =
-      latest_state_.offset_R_L_I.inverse() *
-      (latest_state_.rot * latest_state_.offset_T_L_I + latest_state_.pos - latest_state_.offset_T_L_I);
+      state.offset_R_L_I.inverse() *
+      (state.rot * state.offset_T_L_I + state.pos - state.offset_T_L_I);
 
   Eigen::Quaterniond lidar_orientation =
-      latest_state_.offset_R_L_I.inverse() * latest_state_.rot * latest_state_.offset_R_L_I;
+      state.offset_R_L_I.inverse() * state.rot * state.offset_R_L_I;
 
   return std::make_tuple(lidar_position, lidar_orientation);
 }
@@ -847,17 +847,17 @@ void SPARKFastLIO2::main() {
   }
 }
 
-std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtBaseFrame() const {
+std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtBaseFrame(const state_ikfom& state) const {
   static const Eigen::Matrix3d offset_R_B_I =
-      latest_state_.offset_R_L_I * lidar_R_wrt_base_.inverse();
+      state.offset_R_L_I * lidar_R_wrt_base_.inverse();
   static const Eigen::Vector3d offset_T_B_I =
-      -offset_R_B_I * lidar_T_wrt_base_ + latest_state_.offset_T_L_I;
+      -offset_R_B_I * lidar_T_wrt_base_ + state.offset_T_L_I;
 
   Eigen::Vector3d base_position =
-      offset_R_B_I.inverse() * (latest_state_.rot * offset_T_B_I + latest_state_.pos - offset_T_B_I);
+      offset_R_B_I.inverse() * (state.rot * offset_T_B_I + state.pos - offset_T_B_I);
 
   Eigen::Quaterniond base_orientation =
-      Eigen::Quaterniond(offset_R_B_I.inverse() * latest_state_.rot * offset_R_B_I);
+      Eigen::Quaterniond(offset_R_B_I.inverse() * state.rot * offset_R_B_I);
 
   return std::make_tuple(base_position, base_orientation);
 }
@@ -1073,11 +1073,11 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   }
 
   /******* Publish topics *******/
-  publishOdometry();
+  publishOdometry(latest_state_);
   mapIncremental();
 
   if (path_en_) {
-    publishPath();
+    publishPath(latest_state_);
   }
   if (scan_pub_en_) {
     publishFrameWorld(pub_cloud_full_);
