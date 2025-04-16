@@ -172,7 +172,7 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
                 "'point_filter_num_' instead.");
   }
 
-  RCLCPP_INFO(get_logger(), "SPARKFastLIO2 constructed");
+  RCLCPP_INFO(this->get_logger(), "SPARKFastLIO2 constructed");
 }
 
 // Outputs rotation matrix that aligns a to b, i.e., R such that R * g_a = g_b
@@ -872,7 +872,7 @@ bool SPARKFastLIO2::syncPackages(MeasureGroup &meas, bool verbose) {
 
     // To only print out when changes occur
     if ((num_lidar_prev != num_lidar_curr) || (num_imu_prev != num_imu_curr)) {
-      RCLCPP_INFO(get_logger(), "%lu vs. %lu", num_lidar_curr, num_imu_curr);
+      RCLCPP_INFO(this->get_logger(), "%lu vs. %lu", num_lidar_curr, num_imu_curr);
       num_lidar_prev = num_lidar_curr;
       num_imu_prev   = num_imu_curr;
     }
@@ -892,7 +892,7 @@ bool SPARKFastLIO2::syncPackages(MeasureGroup &meas, bool verbose) {
     } else {
       scan_num_++;
       if (meas.lidar->points.back().curvature < 80 || meas.lidar->points.back().curvature > 120) {
-        RCLCPP_WARN(get_logger(),
+        RCLCPP_WARN(this->get_logger(),
                     "meas.lidar->points.back().curvature (%.2f) should be close to 100. Please "
                     "check the `timestamp_unit` "
                     "or values of `time` (or `t`) field of the point cloud input from your sensor.",
@@ -912,7 +912,7 @@ bool SPARKFastLIO2::syncPackages(MeasureGroup &meas, bool verbose) {
       static double last_imu_timestamp_prev = 0;
       // To only print out when changes occur
       if (last_imu_timestamp_prev != last_imu_timestamp_) {
-        RCLCPP_INFO(get_logger(),
+        RCLCPP_INFO(this->get_logger(),
                     "Not enough IMU data (%.6f < %.6f)",
                     last_imu_timestamp_,
                     lidar_end_time_);
@@ -1038,7 +1038,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
         std::stringstream ss;
         ss << "Waiting for motion: " << global_gravity_directions_.size() << " / "
            << num_gravity_measurements_thr_;
-        RCLCPP_INFO(get_logger(), "%s", ss.str().c_str());
+        RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
       }
 
       global_gravity_directions_.push_back(offset_R_I_B * gravity_direction);
@@ -1054,7 +1054,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
       {
         std::stringstream ss;
         ss << "Gravity alignment complete! `R_gravity_aligned`: " << R_gravity_aligned_;
-        RCLCPP_INFO(get_logger(), "%s", ss.str().c_str());
+        RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
       }
 
       is_gravity_aligned_ = true;
@@ -1067,7 +1067,7 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   state_point_.rot = R_gravity_aligned_ * state_point_.rot;
 
   if (enable_gravity_alignment_ && !is_gravity_aligned_ && !base_frame_.empty()) {
-    RCLCPP_WARN(get_logger(),
+    RCLCPP_WARN(this->get_logger(),
                 "Gravity alignment is enabled but not yet completed. Waiting for alignment...");
     return;
   }
