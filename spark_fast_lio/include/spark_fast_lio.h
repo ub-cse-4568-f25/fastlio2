@@ -49,16 +49,14 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   bool lookupBaseExtrinsics(V3D &lidar_T_wrt_base, M3D &lidar_R_wrt_base);
 
-  void pointBodyToWorld(PointType const *const pi, PointType *const po, state_ikfom &s);
-
-  void pointBodyToWorld(PointType const *const pi, PointType *const po);
+  void pointBodyToWorld(PointType const *const pi, PointType *const po, const state_ikfom &s);
 
   template <typename T>
-  void pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi, Eigen::Matrix<T, 3, 1> &po) const {
+  void pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi,
+                        Eigen::Matrix<T, 3, 1> &po,
+                        const state_ikfom &s) const {
     V3D p_body(pi[0], pi[1], pi[2]);
-    V3D p_global(latest_state_.rot *
-                     (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
-                 latest_state_.pos);
+    V3D p_global(s.rot * (s.offset_R_L_I * p_body + s.offset_T_L_I) + s.pos);
 
     po[0] = p_global(0);
     po[1] = p_global(1);

@@ -276,21 +276,9 @@ bool SPARKFastLIO2::lookupBaseExtrinsics(V3D &lidar_T_wrt_base, M3D &lidar_R_wrt
 
 void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi,
                                      PointType *const po,
-                                     state_ikfom &s) {
+                                     const state_ikfom &s) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(s.rot * (s.offset_R_L_I * p_body + s.offset_T_L_I) + s.pos);
-
-  po->x         = p_global(0);
-  po->y         = p_global(1);
-  po->z         = p_global(2);
-  po->intensity = pi->intensity;
-}
-
-void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi, PointType *const po) {
-  V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(latest_state_.rot *
-                   (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
-               latest_state_.pos);
 
   po->x         = p_global(0);
   po->y         = p_global(1);
@@ -603,7 +591,7 @@ void SPARKFastLIO2::lasermapFovSegment() {
   cub_needrm_.clear();
   kdtree_delete_counter_ = 0;
   kdtree_delete_time_    = 0.0;
-  pointBodyToWorld(xaxis_point_body_, xaxis_point_world_);
+  pointBodyToWorld(xaxis_point_body_, xaxis_point_world_, latest_state_);
 
   // `lidar_xyz`: LiDAR position w.r.t. world frame
   V3D lidar_xyz = kf_.get_lidar_position();
@@ -662,7 +650,8 @@ void SPARKFastLIO2::mapIncremental() {
 
   for (int i = 0; i < feats_down_size_; i++) {
     // transform to world frame
-    pointBodyToWorld(&(feats_down_body_->points[i]), &(feats_down_world_->points[i]));
+    pointBodyToWorld(
+        &(feats_down_body_->points[i]), &(feats_down_world_->points[i]), latest_state_);
 
     // decide if we need to add to map
     if (!nearest_points_[i].empty() && flg_EKF_inited_) {
@@ -1044,7 +1033,8 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
       ikd_tree_.set_downsample_param(filter_size_map_min_);
       feats_down_world_->resize(feats_down_size_);
       for (int i = 0; i < feats_down_size_; i++) {
-        pointBodyToWorld(&(feats_down_body_->points[i]), &(feats_down_world_->points[i]));
+        pointBodyToWorld(
+            &(feats_down_body_->points[i]), &(feats_down_world_->points[i]), latest_state_);
       }
       ikd_tree_.Build(feats_down_world_->points);
     }
