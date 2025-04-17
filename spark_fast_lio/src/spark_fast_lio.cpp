@@ -672,9 +672,9 @@ void SPARKFastLIO2::mapIncremental() {
   kdtree_incremental_time_ = omp_get_wtime() - st_time;
 }
 
-void SPARKFastLIO2::publishOdometry(const state_ikfom& state) {
+void SPARKFastLIO2::publishOdometry(const state_ikfom& state, const rclcpp::Time &stamp) {
   odomAftMapped_.header.frame_id = map_frame_;
-  odomAftMapped_.header.stamp    = rclcpp::Time(lidar_end_time_ * 1e9);
+  odomAftMapped_.header.stamp    = stamp;
 
   setPoseStamp(state, odomAftMapped_.pose, viz_frame_);  // our template function
 
@@ -1079,7 +1079,8 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   }
 
   /******* Publish topics *******/
-  publishOdometry(latest_state_);
+  const auto stamp = rclcpp::Time(lidar_end_time_ * 1e9);
+  publishOdometry(latest_state_, stamp);
   mapIncremental();
 
   if (path_en_) {

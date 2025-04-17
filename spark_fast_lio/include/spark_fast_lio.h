@@ -91,7 +91,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   void mapIncremental();
 
-  void publishOdometry(const state_ikfom& state);
+  void publishOdometry(const state_ikfom& state, const rclcpp::Time &stamp);
 
   void publishPath(const state_ikfom& state);
 
