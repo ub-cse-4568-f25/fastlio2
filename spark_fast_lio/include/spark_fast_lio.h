@@ -35,6 +35,11 @@
 
 namespace spark_fast_lio {
 
+struct PoseStruct {
+  Eigen::Vector3d position_;
+  Eigen::Quaterniond orientation_;
+};
+
 class SPARKFastLIO2 : public rclcpp::Node {
  public:
   explicit SPARKFastLIO2(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
@@ -51,9 +56,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
   template <typename T>
   void pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi, Eigen::Matrix<T, 3, 1> &po) const {
     V3D p_body(pi[0], pi[1], pi[2]);
-    V3D p_global(state_point_.rot *
-                     (state_point_.offset_R_L_I * p_body + state_point_.offset_T_L_I) +
-                 state_point_.pos);
+    V3D p_global(latest_state_.rot *
+                     (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
+                 latest_state_.pos);
 
     po[0] = p_global(0);
     po[1] = p_global(1);
@@ -80,54 +85,57 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   void imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
 
+  void integrateIMU(esekfom::esekf<state_ikfom, 12, input_ikfom> &state,
+                    const sensor_msgs::msg::Imu &msg);
+
   void calcHModel(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data);
 
   void lasermapFovSegment();
 
   void mapIncremental();
 
-  void publishOdometry();
+  void publishOdometry(const state_ikfom &state, const rclcpp::Time &stamp);
 
-  void publishPath();
+  void publishPath(const state_ikfom &state);
 
   void publishFrameWorld(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud);
 
   void publishFrame(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud,
                     const std::string &frame);
 
-  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtLidarFrame() const;
+  PoseStruct transformPoseWrtLidarFrame(const state_ikfom &state) const;
 
-  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtBaseFrame() const;
+  PoseStruct transformPoseWrtBaseFrame(const state_ikfom &state) const;
 
   template <typename T>
-  void setPoseStamp(T &out, const std::string &frame) const {
+  void setPoseStamp(const state_ikfom &state, T &out, const std::string &frame) const {
     if (frame == "imu") {
-      out.pose.position.x    = state_point_.pos(0);
-      out.pose.position.y    = state_point_.pos(1);
-      out.pose.position.z    = state_point_.pos(2);
-      const auto quat        = state_point_.rot.coeffs();
+      out.pose.position.x    = state.pos(0);
+      out.pose.position.y    = state.pos(1);
+      out.pose.position.z    = state.pos(2);
+      const auto quat        = state.rot.coeffs();
       out.pose.orientation.x = quat[0];
       out.pose.orientation.y = quat[1];
       out.pose.orientation.z = quat[2];
       out.pose.orientation.w = quat[3];
     } else if (frame == "lidar") {
-      auto [position, orientation] = transformPoseWrtLidarFrame();
-      out.pose.position.x          = position(0);
-      out.pose.position.y          = position(1);
-      out.pose.position.z          = position(2);
-      out.pose.orientation.x       = orientation.x();
-      out.pose.orientation.y       = orientation.y();
-      out.pose.orientation.z       = orientation.z();
-      out.pose.orientation.w       = orientation.w();
+      const auto &p          = transformPoseWrtLidarFrame(state);
+      out.pose.position.x    = p.position_(0);
+      out.pose.position.y    = p.position_(1);
+      out.pose.position.z    = p.position_(2);
+      out.pose.orientation.x = p.orientation_.x();
+      out.pose.orientation.y = p.orientation_.y();
+      out.pose.orientation.z = p.orientation_.z();
+      out.pose.orientation.w = p.orientation_.w();
     } else if (frame == "base") {
-      auto [position, orientation] = transformPoseWrtBaseFrame();
-      out.pose.position.x          = position(0);
-      out.pose.position.y          = position(1);
-      out.pose.position.z          = position(2);
-      out.pose.orientation.x       = orientation.x();
-      out.pose.orientation.y       = orientation.y();
-      out.pose.orientation.z       = orientation.z();
-      out.pose.orientation.w       = orientation.w();
+      const auto &p          = transformPoseWrtBaseFrame(state);
+      out.pose.position.x    = p.position_(0);
+      out.pose.position.y    = p.position_(1);
+      out.pose.position.z    = p.position_(2);
+      out.pose.orientation.x = p.orientation_.x();
+      out.pose.orientation.y = p.orientation_.y();
+      out.pose.orientation.z = p.orientation_.z();
+      out.pose.orientation.w = p.orientation_.w();
     } else {
       throw std::invalid_argument("Invalid visualization frame has been given");
     }
@@ -311,7 +319,8 @@ class SPARKFastLIO2 : public rclcpp::Node {
   /*** EKF inputs and output ***/
   MeasureGroup Measures_;
   esekfom::esekf<state_ikfom, 12, input_ikfom> kf_;
-  state_ikfom state_point_;
+  std::optional<esekfom::esekf<state_ikfom, 12, input_ikfom>> kf_for_preintegration_;
+  state_ikfom latest_state_;
 
   nav_msgs::msg::Path path_msg_;
   nav_msgs::msg::Odometry odomAftMapped_;
