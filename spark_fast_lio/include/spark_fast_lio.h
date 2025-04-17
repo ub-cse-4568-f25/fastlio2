@@ -35,6 +35,11 @@
 
 namespace spark_fast_lio {
 
+struct PoseStruct {
+    Eigen::Vector3d position_;
+    Eigen::Quaterniond orientation_;
+};
+
 class SPARKFastLIO2 : public rclcpp::Node {
  public:
   explicit SPARKFastLIO2(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
@@ -95,9 +100,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
   void publishFrame(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud,
                     const std::string &frame);
 
-  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtLidarFrame(const state_ikfom& state) const;
+  PoseStruct transformPoseWrtLidarFrame(const state_ikfom& state) const;
 
-  std::tuple<Eigen::Vector3d, Eigen::Quaterniond> transformPoseWrtBaseFrame(const state_ikfom& state) const;
+  PoseStruct transformPoseWrtBaseFrame(const state_ikfom& state) const;
 
   template <typename T>
   void setPoseStamp(const state_ikfom&state, T &out, const std::string &frame) const {
@@ -111,23 +116,23 @@ class SPARKFastLIO2 : public rclcpp::Node {
       out.pose.orientation.z = quat[2];
       out.pose.orientation.w = quat[3];
     } else if (frame == "lidar") {
-      auto [position, orientation] = transformPoseWrtLidarFrame(state);
-      out.pose.position.x          = position(0);
-      out.pose.position.y          = position(1);
-      out.pose.position.z          = position(2);
-      out.pose.orientation.x       = orientation.x();
-      out.pose.orientation.y       = orientation.y();
-      out.pose.orientation.z       = orientation.z();
-      out.pose.orientation.w       = orientation.w();
+      const auto& p = transformPoseWrtLidarFrame(state);
+      out.pose.position.x          = p.position_(0);
+      out.pose.position.y          = p.position_(1);
+      out.pose.position.z          = p.position_(2);
+      out.pose.orientation.x       = p.orientation_.x();
+      out.pose.orientation.y       = p.orientation_.y();
+      out.pose.orientation.z       = p.orientation_.z();
+      out.pose.orientation.w       = p.orientation_.w();
     } else if (frame == "base") {
-      auto [position, orientation] = transformPoseWrtBaseFrame(state);
-      out.pose.position.x          = position(0);
-      out.pose.position.y          = position(1);
-      out.pose.position.z          = position(2);
-      out.pose.orientation.x       = orientation.x();
-      out.pose.orientation.y       = orientation.y();
-      out.pose.orientation.z       = orientation.z();
-      out.pose.orientation.w       = orientation.w();
+      const auto& p = transformPoseWrtBaseFrame(state);
+      out.pose.position.x          = p.position_(0);
+      out.pose.position.y          = p.position_(1);
+      out.pose.position.z          = p.position_(2);
+      out.pose.orientation.x       = p.orientation_.x();
+      out.pose.orientation.y       = p.orientation_.y();
+      out.pose.orientation.z       = p.orientation_.z();
+      out.pose.orientation.w       = p.orientation_.w();
     } else {
       throw std::invalid_argument("Invalid visualization frame has been given");
     }

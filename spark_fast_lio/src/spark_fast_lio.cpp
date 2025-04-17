@@ -829,7 +829,7 @@ void SPARKFastLIO2::publishFrame(
   publish_count_ -= PUBFRAME_PERIOD;
 }
 
-std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtLidarFrame(const state_ikfom& state) const {
+PoseStruct SPARKFastLIO2::transformPoseWrtLidarFrame(const state_ikfom& state) const {
   // offset_A_B: transformation matrix of A w.r.t. B
   Eigen::Vector3d lidar_position =
       state.offset_R_L_I.inverse() *
@@ -838,7 +838,10 @@ std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtL
   Eigen::Quaterniond lidar_orientation =
       state.offset_R_L_I.inverse() * state.rot * state.offset_R_L_I;
 
-  return std::make_tuple(lidar_position, lidar_orientation);
+  PoseStruct output;
+  output.position_    = lidar_position;
+  output.orientation_ = lidar_orientation;
+  return output;
 }
 
 void SPARKFastLIO2::main() {
@@ -847,7 +850,7 @@ void SPARKFastLIO2::main() {
   }
 }
 
-std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtBaseFrame(const state_ikfom& state) const {
+PoseStruct SPARKFastLIO2::transformPoseWrtBaseFrame(const state_ikfom& state) const {
   static const Eigen::Matrix3d offset_R_B_I =
       state.offset_R_L_I * lidar_R_wrt_base_.inverse();
   static const Eigen::Vector3d offset_T_B_I =
@@ -859,7 +862,10 @@ std::tuple<Eigen::Vector3d, Eigen::Quaterniond> SPARKFastLIO2::transformPoseWrtB
   Eigen::Quaterniond base_orientation =
       Eigen::Quaterniond(offset_R_B_I.inverse() * state.rot * offset_R_B_I);
 
-  return std::make_tuple(base_position, base_orientation);
+  PoseStruct output;
+  output.position_    = base_position;
+  output.orientation_ = base_orientation;
+  return output;
 }
 
 bool SPARKFastLIO2::syncPackages(MeasureGroup &meas, bool verbose) {
