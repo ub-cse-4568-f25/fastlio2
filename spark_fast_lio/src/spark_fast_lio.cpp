@@ -288,7 +288,8 @@ void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi,
 
 void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(latest_state_.rot * (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
+  V3D p_global(latest_state_.rot *
+                   (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
                latest_state_.pos);
 
   po->x         = p_global(0);
@@ -299,7 +300,8 @@ void SPARKFastLIO2::pointBodyToWorld(PointType const *const pi, PointType *const
 
 void SPARKFastLIO2::pclPointBodyToWorld(PointType const *const pi, PointType *const po) {
   V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(latest_state_.rot * (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
+  V3D p_global(latest_state_.rot *
+                   (latest_state_.offset_R_L_I * p_body + latest_state_.offset_T_L_I) +
                latest_state_.pos);
 
   po->x         = p_global(0);
@@ -330,7 +332,8 @@ void SPARKFastLIO2::pclPointBodyLidarToBase(PointType const *const pi, PointType
 
 void SPARKFastLIO2::pclPointIMUToLiDAR(PointType const *const pi, PointType *const po) {
   V3D p_body_imu(pi->x, pi->y, pi->z);
-  V3D p_body_lidar(latest_state_.offset_R_L_I.inverse() * (p_body_imu - latest_state_.offset_T_L_I));
+  V3D p_body_lidar(latest_state_.offset_R_L_I.inverse() *
+                   (p_body_imu - latest_state_.offset_T_L_I));
 
   po->x         = p_body_lidar(0);
   po->y         = p_body_lidar(1);
@@ -439,11 +442,48 @@ void SPARKFastLIO2::imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
   if (stamp < last_imu_timestamp_) {
     RCLCPP_WARN(get_logger(), "IMU loopback, clearing buffers");
     imu_buffer_.clear();
+    kf_for_preintegration_.reset();
   }
   last_imu_timestamp_ = stamp;
 
+  if (kf_for_preintegration_.has_value()) {
+    integrateIMU(*kf_for_preintegration_, *imu_input);
+  }
+
   imu_buffer_.push_back(imu_input);
   sig_buffer_.notify_all();
+}
+
+void SPARKFastLIO2::integrateIMU(esekfom::esekf<state_ikfom, 12, input_ikfom> &state,
+                                 const sensor_msgs::msg::Imu &msg) {
+  V3D angvel_avr, acc_avr, acc_imu, vel_imu, pos_imu;
+  M3D R_imu;
+
+  static std::deque<sensor_msgs::msg::Imu> imu_queue;
+  imu_queue.push_back(msg);
+
+  if (imu_queue.size() < 2) {
+    return;
+  }
+
+  // Assume that timestamps are sufficiently close and ascending order
+  double dt = rclcpp::Time(imu_queue[1].header.stamp).seconds() -
+              rclcpp::Time(imu_queue[0].header.stamp).seconds();
+
+  if (dt <= 0) {
+    RCLCPP_ERROR(this->get_logger(), "IMU timestamps must be in ascending order!");
+    imu_queue.pop_front();
+    return;
+  }
+
+  auto integrated_state = imu_processor_->IntegrateIMU(imu_queue, state);
+  const auto &stamp     = imu_queue[1].header.stamp;
+  imu_queue.pop_front();
+
+  integrated_state.pos = R_gravity_aligned_ * integrated_state.pos;
+  integrated_state.rot = R_gravity_aligned_ * integrated_state.rot;
+
+  publishOdometry(integrated_state, stamp);
 }
 
 void SPARKFastLIO2::calcHModel(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data) {
@@ -672,7 +712,7 @@ void SPARKFastLIO2::mapIncremental() {
   kdtree_incremental_time_ = omp_get_wtime() - st_time;
 }
 
-void SPARKFastLIO2::publishOdometry(const state_ikfom& state, const rclcpp::Time &stamp) {
+void SPARKFastLIO2::publishOdometry(const state_ikfom &state, const rclcpp::Time &stamp) {
   odomAftMapped_.header.frame_id = map_frame_;
   odomAftMapped_.header.stamp    = stamp;
 
@@ -716,7 +756,7 @@ void SPARKFastLIO2::publishOdometry(const state_ikfom& state, const rclcpp::Time
   tf_broadcaster_->sendTransform(transform_stamped);
 }
 
-void SPARKFastLIO2::publishPath(const state_ikfom& state) {
+void SPARKFastLIO2::publishPath(const state_ikfom &state) {
   setPoseStamp(state, msg_body_pose_, viz_frame_);
   msg_body_pose_.header.stamp    = rclcpp::Time(lidar_end_time_ * 1e9);
   msg_body_pose_.header.frame_id = map_frame_;
@@ -829,11 +869,10 @@ void SPARKFastLIO2::publishFrame(
   publish_count_ -= PUBFRAME_PERIOD;
 }
 
-PoseStruct SPARKFastLIO2::transformPoseWrtLidarFrame(const state_ikfom& state) const {
+PoseStruct SPARKFastLIO2::transformPoseWrtLidarFrame(const state_ikfom &state) const {
   // offset_A_B: transformation matrix of A w.r.t. B
-  Eigen::Vector3d lidar_position =
-      state.offset_R_L_I.inverse() *
-      (state.rot * state.offset_T_L_I + state.pos - state.offset_T_L_I);
+  Eigen::Vector3d lidar_position = state.offset_R_L_I.inverse() * (state.rot * state.offset_T_L_I +
+                                                                   state.pos - state.offset_T_L_I);
 
   Eigen::Quaterniond lidar_orientation =
       state.offset_R_L_I.inverse() * state.rot * state.offset_R_L_I;
@@ -850,9 +889,8 @@ void SPARKFastLIO2::main() {
   }
 }
 
-PoseStruct SPARKFastLIO2::transformPoseWrtBaseFrame(const state_ikfom& state) const {
-  static const Eigen::Matrix3d offset_R_B_I =
-      state.offset_R_L_I * lidar_R_wrt_base_.inverse();
+PoseStruct SPARKFastLIO2::transformPoseWrtBaseFrame(const state_ikfom &state) const {
+  static const Eigen::Matrix3d offset_R_B_I = state.offset_R_L_I * lidar_R_wrt_base_.inverse();
   static const Eigen::Vector3d offset_T_B_I =
       -offset_R_B_I * lidar_T_wrt_base_ + state.offset_T_L_I;
 
@@ -1067,7 +1105,8 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
     }
   }
 
-  latest_state_ = kf_.get_x();
+  latest_state_          = kf_.get_x();
+  kf_for_preintegration_ = kf_;
   // Update corrected rotation here
   latest_state_.pos = R_gravity_aligned_ * latest_state_.pos;
   latest_state_.rot = R_gravity_aligned_ * latest_state_.rot;

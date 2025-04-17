@@ -56,7 +56,8 @@ class ImuProcess {
   void Process(const MeasureGroup &meas,
                esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state,
                PointCloudXYZI::Ptr pcl_un_);
-
+  state_ikfom IntegrateIMU(const std::deque<sensor_msgs::msg::Imu> imu_queue,
+                           esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state);
   std::ofstream fout_imu;
   V3D cov_acc;
   V3D cov_gyr;
@@ -201,6 +202,37 @@ void ImuProcess::IMU_init(const MeasureGroup &meas,
   init_P(21, 21) = init_P(22, 22) = 0.00001;
   kf_state.change_P(init_P);
   last_imu_ = meas.imu.back();
+}
+
+state_ikfom ImuProcess::IntegrateIMU(const std::deque<sensor_msgs::msg::Imu> imu_queue,
+                                     esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state) {
+  V3D angvel_avr, acc_avr, acc_imu, vel_imu, pos_imu;
+  M3D R_imu;
+
+  input_ikfom in;
+  const auto &head = imu_queue[0];
+  const auto &tail = imu_queue[1];
+
+  angvel_avr << 0.5 * (head.angular_velocity.x + tail.angular_velocity.x),
+      0.5 * (head.angular_velocity.y + tail.angular_velocity.y),
+      0.5 * (head.angular_velocity.z + tail.angular_velocity.z);
+  acc_avr << 0.5 * (head.linear_acceleration.x + tail.linear_acceleration.x),
+      0.5 * (head.linear_acceleration.y + tail.linear_acceleration.y),
+      0.5 * (head.linear_acceleration.z + tail.linear_acceleration.z);
+
+  acc_avr = acc_avr * G_m_s2 / mean_acc.norm();  // - state_inout.ba;
+
+  double dt = rclcpp::Time(tail.header.stamp).seconds() - rclcpp::Time(head.header.stamp).seconds();
+
+  in.acc                         = acc_avr;
+  in.gyro                        = angvel_avr;
+  Q.block<3, 3>(0, 0).diagonal() = cov_gyr;
+  Q.block<3, 3>(3, 3).diagonal() = cov_acc;
+  Q.block<3, 3>(6, 6).diagonal() = cov_bias_gyr;
+  Q.block<3, 3>(9, 9).diagonal() = cov_bias_acc;
+  kf_state.predict(dt, Q, in);
+
+  return kf_state.get_x();
 }
 
 void ImuProcess::UndistortPcl(const MeasureGroup &meas,

@@ -36,8 +36,8 @@
 namespace spark_fast_lio {
 
 struct PoseStruct {
-    Eigen::Vector3d position_;
-    Eigen::Quaterniond orientation_;
+  Eigen::Vector3d position_;
+  Eigen::Quaterniond orientation_;
 };
 
 class SPARKFastLIO2 : public rclcpp::Node {
@@ -85,27 +85,30 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   void imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
 
+  void integrateIMU(esekfom::esekf<state_ikfom, 12, input_ikfom> &state,
+                    const sensor_msgs::msg::Imu &msg);
+
   void calcHModel(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data);
 
   void lasermapFovSegment();
 
   void mapIncremental();
 
-  void publishOdometry(const state_ikfom& state, const rclcpp::Time &stamp);
+  void publishOdometry(const state_ikfom &state, const rclcpp::Time &stamp);
 
-  void publishPath(const state_ikfom& state);
+  void publishPath(const state_ikfom &state);
 
   void publishFrameWorld(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud);
 
   void publishFrame(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloud,
                     const std::string &frame);
 
-  PoseStruct transformPoseWrtLidarFrame(const state_ikfom& state) const;
+  PoseStruct transformPoseWrtLidarFrame(const state_ikfom &state) const;
 
-  PoseStruct transformPoseWrtBaseFrame(const state_ikfom& state) const;
+  PoseStruct transformPoseWrtBaseFrame(const state_ikfom &state) const;
 
   template <typename T>
-  void setPoseStamp(const state_ikfom&state, T &out, const std::string &frame) const {
+  void setPoseStamp(const state_ikfom &state, T &out, const std::string &frame) const {
     if (frame == "imu") {
       out.pose.position.x    = state.pos(0);
       out.pose.position.y    = state.pos(1);
@@ -116,23 +119,23 @@ class SPARKFastLIO2 : public rclcpp::Node {
       out.pose.orientation.z = quat[2];
       out.pose.orientation.w = quat[3];
     } else if (frame == "lidar") {
-      const auto& p = transformPoseWrtLidarFrame(state);
-      out.pose.position.x          = p.position_(0);
-      out.pose.position.y          = p.position_(1);
-      out.pose.position.z          = p.position_(2);
-      out.pose.orientation.x       = p.orientation_.x();
-      out.pose.orientation.y       = p.orientation_.y();
-      out.pose.orientation.z       = p.orientation_.z();
-      out.pose.orientation.w       = p.orientation_.w();
+      const auto &p          = transformPoseWrtLidarFrame(state);
+      out.pose.position.x    = p.position_(0);
+      out.pose.position.y    = p.position_(1);
+      out.pose.position.z    = p.position_(2);
+      out.pose.orientation.x = p.orientation_.x();
+      out.pose.orientation.y = p.orientation_.y();
+      out.pose.orientation.z = p.orientation_.z();
+      out.pose.orientation.w = p.orientation_.w();
     } else if (frame == "base") {
-      const auto& p = transformPoseWrtBaseFrame(state);
-      out.pose.position.x          = p.position_(0);
-      out.pose.position.y          = p.position_(1);
-      out.pose.position.z          = p.position_(2);
-      out.pose.orientation.x       = p.orientation_.x();
-      out.pose.orientation.y       = p.orientation_.y();
-      out.pose.orientation.z       = p.orientation_.z();
-      out.pose.orientation.w       = p.orientation_.w();
+      const auto &p          = transformPoseWrtBaseFrame(state);
+      out.pose.position.x    = p.position_(0);
+      out.pose.position.y    = p.position_(1);
+      out.pose.position.z    = p.position_(2);
+      out.pose.orientation.x = p.orientation_.x();
+      out.pose.orientation.y = p.orientation_.y();
+      out.pose.orientation.z = p.orientation_.z();
+      out.pose.orientation.w = p.orientation_.w();
     } else {
       throw std::invalid_argument("Invalid visualization frame has been given");
     }
@@ -316,6 +319,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   /*** EKF inputs and output ***/
   MeasureGroup Measures_;
   esekfom::esekf<state_ikfom, 12, input_ikfom> kf_;
+  std::optional<esekfom::esekf<state_ikfom, 12, input_ikfom>> kf_for_preintegration_;
   state_ikfom latest_state_;
 
   nav_msgs::msg::Path path_msg_;
