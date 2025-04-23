@@ -2,11 +2,11 @@
 launch:
   - arg: {name: start_rviz, default: 'true', description: automatically start rviz}
   - arg: {name: rviz_path,  default: $(find-pkg-share spark_fast_lio)/rviz/rviz2.rviz, description: rviz file to load}
+  - arg: {name: robot_name, default: 'rrghusky', description: 'The actual robot used when acquiring data' }
 
-  - arg: {name: save_dir,      default: 'test2', description: 'Directory to save logs' }
-  - arg: {name: sequence_name, default: '', description: 'Sequence name' }
-  - arg: {name: robot_name,    default: 'rrg_husky', description: 'Robot name / namespace' }
-  - arg: {name: config_path,   default: $(find-pkg-share spark_fast_lio)/config/dcist_rrg/$(var robot_name).yaml, description: Model-specific configuration}
+  # Frames
+  - arg: {name: map_frame, default: 'odom'}
+  - arg: {name: base_frame, default: 'base_link'}
 
   - node:
       namespace: $(var robot_name)
@@ -21,11 +21,21 @@ launch:
         - { from: 'imu',   to: 'imu/data'   }
 
       param:
-        - name: "common.save_dir"
-          value: "$(var save_dir)"
-        - name: "common.sequence_name"
-          value: "$(var sequence_name)"
-        - from: $(var config_path)
+        - name: "common.lidar_frame"
+          value: "$(var robot_name)/base"
+        - name: "common.imu_frame"
+          value: "$(var robot_name)/imu_link"
+        - name: "common.map_frame"
+          value: "$(var robot_name)/$(var map_frame)"
+        # - name: "common.base_frame"
+        #   value: "$(var robot_name)/$(var base_frame)"
+        - name: "common.visualization_frame"
+          value: "base"
+
+        - name: "gravity_alignment.enable_gravity_alignment"
+          value: false
+
+        - from: $(find-pkg-share spark_fast_lio)/config/dcist_rrg/$(var robot_name).yaml
 
   - node:
       if: $(var start_rviz)
@@ -35,4 +45,4 @@ launch:
       launch-prefix: "nice"
       output: "screen"
       args: >
-        -d $(var rviz_path)
+        -d $(find-pkg-share spark_fast_lio)/rviz/dcist_rrg/$(var robot_name).rviz
