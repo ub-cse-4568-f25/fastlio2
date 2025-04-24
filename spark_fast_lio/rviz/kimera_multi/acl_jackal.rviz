@@ -9,6 +9,7 @@ Panels:
         - /acl_jackal1
         - /acl_jackal1/Path1
         - /acl_jackal1/PointCloud21
+        - /acl_jackal1/PointCloud21/Autocompute Value Bounds1
         - /acl_jackal1/Odometry1
         - /acl_jackal1/PointCloud22
       Splitter Ratio: 0.5
@@ -57,13 +58,13 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz_default_plugins/Path
-          Color: 25; 255; 0
+          Color: 255; 255; 5
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 1
-          Line Style: Lines
-          Line Width: 0.029999999329447746
+          Line Style: Billboards
+          Line Width: 0.30000001192092896
           Name: Path
           Offset:
             X: 0
@@ -71,7 +72,7 @@ Visualization Manager:
             Z: 0
           Pose Color: 255; 85; 255
           Pose Style: Axes
-          Radius: 0.10000000149011612
+          Radius: 0.30000001192092896
           Shaft Diameter: 0.10000000149011612
           Shaft Length: 0.10000000149011612
           Topic:
@@ -192,7 +193,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
-    Fixed Frame: acl_jackal/base
+    Fixed Frame: acl_jackal/odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -235,25 +236,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 112.42424011230469
+      Distance: 57.39105987548828
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -4.511141300201416
-        Y: -1.27670419216156
-        Z: 7.805233001708984
+        X: -1.2713412046432495
+        Y: -2.87793231010437
+        Z: 6.42384672164917
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.36520254611968994
+      Pitch: -0.6497972011566162
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.733540058135986
+      Yaw: 4.7235426902771
     Saved: ~
 Window Geometry:
   Displays:

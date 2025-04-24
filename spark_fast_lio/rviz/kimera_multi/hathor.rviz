@@ -58,13 +58,13 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz_default_plugins/Path
-          Color: 25; 255; 0
+          Color: 255; 255; 5
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 1
-          Line Style: Lines
-          Line Width: 0.029999999329447746
+          Line Style: Billboards
+          Line Width: 0.30000001192092896
           Name: Path
           Offset:
             X: 0
@@ -72,7 +72,7 @@ Visualization Manager:
             Z: 0
           Pose Color: 255; 85; 255
           Pose Style: Axes
-          Radius: 0.10000000149011612
+          Radius: 0.30000001192092896
           Shaft Diameter: 0.10000000149011612
           Shaft Length: 0.10000000149011612
           Topic:
@@ -81,14 +81,14 @@ Visualization Manager:
             Filter size: 10
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /hathor/path
+            Value: /acl_jackal2/path
           Value: true
         - Alpha: 0.5
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 0
-            Min Value: -8.364700317382812
-            Value: false
+            Max Value: 69.28446960449219
+            Min Value: -23.597156524658203
+            Value: true
           Axis: Y
           Channel Name: intensity
           Class: rviz_default_plugins/PointCloud2
@@ -112,7 +112,7 @@ Visualization Manager:
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /hathor/cloud_registered
+            Value: /acl_jackal2/cloud_registered
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
@@ -184,7 +184,7 @@ Visualization Manager:
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /hathor/cloud_registered
+            Value: /acl_jackal2/cloud_registered
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
@@ -193,7 +193,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
-    Fixed Frame: hathor/base
+    Fixed Frame: acl_jackal2/odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -236,25 +236,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 112.42424011230469
+      Distance: 72.2605209350586
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -4.511141300201416
-        Y: -1.27670419216156
-        Z: 7.805233001708984
+        X: -4.425690650939941
+        Y: -9.44948959350586
+        Z: 30.707195281982422
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.36520254611968994
+      Pitch: 1.4997963905334473
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.733540058135986
+      Yaw: 4.798553466796875
     Saved: ~
 Window Geometry:
   Displays:
@@ -272,5 +272,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1885
-  X: 4375
-  Y: 551
+  X: 2117
+  Y: 689

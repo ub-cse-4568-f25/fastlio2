@@ -81,13 +81,13 @@ Visualization Manager:
             Filter size: 10
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /acl_jackal2/path
+            Value: /sparkal2/path
           Value: true
         - Alpha: 0.5
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 69.28446960449219
-            Min Value: -23.597156524658203
+            Max Value: 66.26715087890625
+            Min Value: -12.808854103088379
             Value: true
           Axis: Y
           Channel Name: intensity
@@ -112,7 +112,7 @@ Visualization Manager:
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /acl_jackal2/cloud_registered
+            Value: /sparkal2/cloud_registered
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
@@ -184,7 +184,7 @@ Visualization Manager:
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /acl_jackal2/cloud_registered
+            Value: /sparkal2/cloud_registered
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
@@ -193,7 +193,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
-    Fixed Frame: acl_jackal2/odom
+    Fixed Frame: sparkal2/odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -236,25 +236,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 72.2605209350586
+      Distance: 59.567256927490234
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -4.425690650939941
-        Y: -9.44948959350586
-        Z: 30.707195281982422
-      Focal Shape Fixed Size: true
+        X: 3.340224266052246
+        Y: 9.494876861572266
+        Z: -1.230037808418274
+      Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.4997963905334473
+      Pitch: 1.5453970432281494
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.798553466796875
+      Yaw: 6.263584136962891
     Saved: ~
 Window Geometry:
   Displays:
@@ -272,5 +272,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1885
-  X: 2117
-  Y: 689
+  X: 2115
+  Y: 594
