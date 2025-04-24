@@ -1,4 +1,4 @@
-apis/lio_mapping:
+/**:
   ros__parameters:
     preprocess:
       lidar_type: 4               # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
