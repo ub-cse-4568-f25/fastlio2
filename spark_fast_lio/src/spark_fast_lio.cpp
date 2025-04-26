@@ -803,7 +803,9 @@ void SPARKFastLIO2::publishFrameWorld(
     for (int i = 0; i < nsize; i++) {
       pclPointBodyToWorld(&cloud_undistort_->points[i], &laserCloudWorld2->points[i]);
     }
-    *cloud_to_be_saved_ += *laserCloudWorld2;  // see below if you store that as a member
+    if (pcd_save_interval_ > 0) {
+      *cloud_to_be_saved_ += *laserCloudWorld2;  // see below if you store that as a member
+    }
 
     static int scan_wait_num = 0;
     scan_wait_num++;
