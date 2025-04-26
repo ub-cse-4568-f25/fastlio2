@@ -143,8 +143,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   bool syncPackages(MeasureGroup &meas, bool verbose);
 
-  void processLidarAndImu(MeasureGroup &Measure);
+  bool isMotionStopped(const V3D &acc_ref, const V3D &acc_curr, const double acc_diff_thr);
 
+  void processLidarAndImu(MeasureGroup &Measure);
  private:
   std::mutex buffer_mutex_;
 

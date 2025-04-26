@@ -974,6 +974,11 @@ bool SPARKFastLIO2::syncPackages(MeasureGroup &meas, bool verbose) {
   return true;
 }
 
+bool SPARKFastLIO2::isMotionStopped(const V3D &acc_ref, const V3D &acc_curr,
+                                    const double acc_diff_thr) {
+  return (acc_ref - acc_curr).norm() <= acc_diff_thr;
+}
+
 void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
   if (flg_first_scan_) {
     first_lidar_time_                = Measures.lidar_beg_time;
@@ -1011,14 +1016,13 @@ void SPARKFastLIO2::processLidarAndImu(MeasureGroup &Measures) {
       mean_acc_stopped_ = Measures.getMeanAcc();
     } else {
       const auto &mean_acc = Measures.getMeanAcc();
-      const auto acc_diff  = (mean_acc_stopped_ - mean_acc).norm();
-      if (acc_diff > acc_diff_thr_) {
-        num_consecutive_moving_frames = min(num_consecutive_moving_frames + 1, 100000);
-      } else {
+      if (isMotionStopped(mean_acc_stopped_, mean_acc, acc_diff_thr_)) {
         RCLCPP_WARN_STREAM(
             this->get_logger(),
             "Waiting for motion to perform gravity alignment...now a robot has been stopped");
         num_consecutive_moving_frames = 0;
+      } else {
+        num_consecutive_moving_frames = min(num_consecutive_moving_frames + 1, 100000);
       }
     }
   }
