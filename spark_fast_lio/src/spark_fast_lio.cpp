@@ -62,6 +62,11 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
       declare_parameter<int>("gravity_alignment.num_gravity_measurements_thr", 20);
 
   verbose_           = declare_parameter<bool>("verbose", false);
+  pcl_verbose_       = declare_parameter<bool>("pcl_verbose", true);
+  if (!pcl_verbose_) {
+    pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
+  }
+
   runtime_pos_log_   = declare_parameter<bool>("runtime_pos_log_enable", false);
   extrinsic_est_en_  = declare_parameter<bool>("mapping.extrinsic_est_en", false);
   pcd_save_en_       = declare_parameter<bool>("pcd_save.pcd_save_en", false);

@@ -210,6 +210,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   bool scan_base_pub_en_  = false;
 
   bool verbose_ = false;
+  bool pcl_verbose_ = true;
 
   bool enable_gravity_alignment_ = false;
   bool is_gravity_aligned_       = false;
