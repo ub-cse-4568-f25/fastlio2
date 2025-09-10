@@ -168,6 +168,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
+  rclcpp::Clock::SharedPtr clock_;
   rclcpp::TimerBase::SharedPtr main_loop_timer_;
 
   /*** Time Log Variables ***/
@@ -285,6 +286,7 @@ class SPARKFastLIO2 : public rclcpp::Node {
   std::vector<double> g_base_vec_{0.0, 0.0, -1.0};
   std::vector<double> extrinT_{0.0, 0.0, 0.0};
   std::vector<double> extrinR_{1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+  double extrinsics_timeout_s_ = 10.0;
 
   std::deque<double> time_buffer_;
   std::deque<PointCloudXYZI::Ptr> lidar_buffer_;

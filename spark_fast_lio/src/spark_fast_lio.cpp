@@ -10,7 +10,7 @@
 namespace spark_fast_lio {
 
 SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
-    : Node("spark_fast_lio_node", options) {
+    : Node("spark_fast_lio_node", options), clock_(get_clock()) {
   preprocessor_  = std::make_shared<Preprocess>();
   imu_processor_ = std::make_shared<ImuProcess>();
 
@@ -61,16 +61,17 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   num_gravity_measurements_thr_ =
       declare_parameter<int>("gravity_alignment.num_gravity_measurements_thr", 20);
 
-  verbose_           = declare_parameter<bool>("verbose", false);
-  pcl_verbose_       = declare_parameter<bool>("pcl_verbose", true);
+  verbose_     = declare_parameter<bool>("verbose", false);
+  pcl_verbose_ = declare_parameter<bool>("pcl_verbose", true);
   if (!pcl_verbose_) {
     pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
   }
 
-  runtime_pos_log_   = declare_parameter<bool>("runtime_pos_log_enable", false);
-  extrinsic_est_en_  = declare_parameter<bool>("mapping.extrinsic_est_en", false);
-  pcd_save_en_       = declare_parameter<bool>("pcd_save.pcd_save_en", false);
-  pcd_save_interval_ = declare_parameter<int>("pcd_save.interval", -1);
+  runtime_pos_log_      = declare_parameter<bool>("runtime_pos_log_enable", false);
+  extrinsic_est_en_     = declare_parameter<bool>("mapping.extrinsic_est_en", false);
+  extrinsics_timeout_s_ = declare_parameter<double>("extrinsics_timeout_s", 10.0);
+  pcd_save_en_          = declare_parameter<bool>("pcd_save.pcd_save_en", false);
+  pcd_save_interval_    = declare_parameter<int>("pcd_save.interval", -1);
 
   point_filter_num_ = declare_parameter<int>("point_filter_num", 4);
 
@@ -226,7 +227,7 @@ bool SPARKFastLIO2::lookupBaseExtrinsics(V3D &lidar_T_wrt_base, M3D &lidar_R_wrt
   bool has_transform     = false;
   std::string err_str;
   auto start_time          = this->now();
-  rclcpp::Duration timeout = rclcpp::Duration::from_seconds(10.0);
+  rclcpp::Duration timeout = rclcpp::Duration::from_seconds(extrinsics_timeout_s_);
   rclcpp::Rate rate(10.0);  // Just 10 Hz works
 
   while (rclcpp::ok()) {
@@ -237,13 +238,22 @@ bool SPARKFastLIO2::lookupBaseExtrinsics(V3D &lidar_T_wrt_base, M3D &lidar_R_wrt
       break;
     }
 
-    if ((this->now() - start_time) > timeout) {
+    const auto time_since_start = now() - start_time;
+    if (extrinsics_timeout_s_ > 0.0 && time_since_start > timeout) {
       RCLCPP_ERROR_STREAM(this->get_logger(),
                           "Timeout after "
                               << timeout.seconds() << " seconds waiting for transform from '"
                               << lidar_frame_ << "' to '" << base_frame_ << "': " << err_str);
       break;
     }
+
+    RCLCPP_WARN_STREAM_SKIPFIRST_THROTTLE(get_logger(),
+                                          *clock_,
+                                          5000,
+                                          "Waiting for transform from '" << lidar_frame_ << "' to '"
+                                                                         << base_frame_
+                                                                         << "': " << err_str);
+
     rate.sleep();
   }
 
@@ -979,7 +989,8 @@ bool SPARKFastLIO2::syncPackages(MeasureGroup &meas, bool verbose) {
   return true;
 }
 
-bool SPARKFastLIO2::isMotionStopped(const V3D &acc_ref, const V3D &acc_curr,
+bool SPARKFastLIO2::isMotionStopped(const V3D &acc_ref,
+                                    const V3D &acc_curr,
                                     const double acc_diff_thr) {
   return (acc_ref - acc_curr).norm() <= acc_diff_thr;
 }
