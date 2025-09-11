@@ -234,9 +234,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   double res_mean_last_          = 0.05;
   double total_residual_         = 0.0;
-  double last_lidar_timestamp_   = 0.0;
-  double last_imu_timestamp_     = -1.0;
-  double timediff_lidar_wrt_imu_ = 0.0;
+  rclcpp::Time last_lidar_timestamp_;
+  rclcpp::Time last_imu_timestamp_;
+  int64_t timediff_lidar_wrt_imu_ = 0;
 
   double gyr_cov_   = 0.1;
   double acc_cov_   = 0.1;
