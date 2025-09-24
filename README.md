@@ -17,7 +17,7 @@ Put the code in your workspace/src folder
 
 ```shell
 cd ${YOUR_COLCON_WORKSPACE}/src
-git clone https://github.com/MIT-SPARK/spark-fast-lio.git
+git clone https://github.com/ub-cse-4568-f25/fastlio2.git
 colcon build --packages-up-to spark_fast_lio
 ```
 
