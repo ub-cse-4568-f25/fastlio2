@@ -52,6 +52,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 find_package(Eigen3 REQUIRED)
 set(PCL_FIND_QUIETLY ON)
@@ -59,9 +60,11 @@ set(PCL_FIND_QUIETLY ON)
 include_directories(
   include
   third_party/ikd-Tree
-  third_party/IKFoM_toolkit)
+  third_party/IKFoM_toolkit
+  )
 
 include_directories(${PCL_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIR})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
@@ -85,6 +88,7 @@ target_compile_features(spark_lio_component PUBLIC cxx_std_20)
 # Link external libs. Replace `ikd_tree` with your actual library name
 target_link_libraries(spark_lio_component
   ${PCL_LIBRARIES}
+  Eigen3::Eigen
   ikd_tree
 )
 
