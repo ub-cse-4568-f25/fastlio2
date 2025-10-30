@@ -147,6 +147,9 @@ class SPARKFastLIO2 : public rclcpp::Node {
 
   void processLidarAndImu(MeasureGroup &Measure);
  private:
+
+  void saveFinalMap();
+  
   std::mutex buffer_mutex_;
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;

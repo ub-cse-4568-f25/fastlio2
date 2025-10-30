@@ -7,6 +7,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include <filesystem>
+
 namespace spark_fast_lio {
 
 SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
@@ -65,7 +67,6 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
   runtime_pos_log_   = declare_parameter<bool>("runtime_pos_log_enable", false);
   extrinsic_est_en_  = declare_parameter<bool>("mapping.extrinsic_est_en", false);
   pcd_save_en_       = declare_parameter<bool>("pcd_save.pcd_save_en", false);
-  pcd_save_interval_ = declare_parameter<int>("pcd_save.interval", -1);
 
   point_filter_num_ = declare_parameter<int>("point_filter_num", 4);
 
@@ -171,6 +172,11 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
                 "Points may be too sparse. Set 'preprocessor_->point_filter_num = 1' and tune "
                 "'point_filter_num_' instead.");
   }
+
+  rclcpp::on_shutdown([this]() {
+    RCLCPP_INFO(this->get_logger(), "Shutting down, saving final map...");
+    this->saveFinalMap();
+  });
 
   RCLCPP_INFO(this->get_logger(), "SPARKFastLIO2 constructed");
 }
@@ -803,24 +809,18 @@ void SPARKFastLIO2::publishFrameWorld(
     for (int i = 0; i < nsize; i++) {
       pclPointBodyToWorld(&cloud_undistort_->points[i], &laserCloudWorld2->points[i]);
     }
-    if (pcd_save_interval_ > 0) {
+    if (pcd_save_en_) {
       *cloud_to_be_saved_ += *laserCloudWorld2;  // see below if you store that as a member
     }
-
-    static int scan_wait_num = 0;
-    scan_wait_num++;
-    if (cloud_to_be_saved_->size() > 0 && pcd_save_interval_ > 0 &&
-        scan_wait_num >= pcd_save_interval_) {
-      pcd_index_++;
-      std::string all_points_dir(std::string(ROOT_DIR) + "PCD/scans_" + std::to_string(pcd_index_) +
-                                 ".pcd");
-      pcl::PCDWriter pcd_writer;
-      std::cout << "Current scan saved to /PCD/ " << all_points_dir << std::endl;
-      pcd_writer.writeBinary(all_points_dir, *cloud_to_be_saved_);
-      cloud_to_be_saved_->clear();
-      scan_wait_num = 0;
-    }
   }
+}
+
+void SPARKFastLIO2::saveFinalMap() {
+  if (!pcd_save_en_) return;
+  std::string all_points_dir = std::filesystem::current_path() /"scene.pcd";
+  pcl::PCDWriter pcd_writer;
+  std::cout << "Scan Saved: " << all_points_dir << std::endl;
+  pcd_writer.writeBinary(all_points_dir, *cloud_to_be_saved_);
 }
 
 void SPARKFastLIO2::publishFrame(
