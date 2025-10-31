@@ -173,11 +173,6 @@ SPARKFastLIO2::SPARKFastLIO2(const rclcpp::NodeOptions &options)
                 "'point_filter_num_' instead.");
   }
 
-  rclcpp::on_shutdown([this]() {
-    RCLCPP_INFO(this->get_logger(), "Shutting down, saving final map...");
-    this->saveFinalMap();
-  });
-
   RCLCPP_INFO(this->get_logger(), "SPARKFastLIO2 constructed");
 }
 
@@ -801,17 +796,26 @@ void SPARKFastLIO2::publishFrameWorld(
   pubCloud->publish(cloud_msg);
   publish_count_ -= PUBFRAME_PERIOD;
 
+
   // Optionally do the pcd_save_en_ part
   if (pcd_save_en_) {
-    int nsize = cloud_undistort_->points.size();
-    PointCloudXYZI::Ptr laserCloudWorld2(new PointCloudXYZI(nsize, 1));
+    static int count = 0;
+    count++;
+    if (count < 100){
+      int nsize = cloud_undistort_->points.size();
+      PointCloudXYZI::Ptr laserCloudWorld2(new PointCloudXYZI(nsize, 1));
 
-    for (int i = 0; i < nsize; i++) {
-      pclPointBodyToWorld(&cloud_undistort_->points[i], &laserCloudWorld2->points[i]);
+      for (int i = 0; i < nsize; i++) {
+        pclPointBodyToWorld(&cloud_undistort_->points[i], &laserCloudWorld2->points[i]);
+      }
+      *cloud_to_be_saved_ += *laserCloudWorld2;
     }
-    if (pcd_save_en_) {
-      *cloud_to_be_saved_ += *laserCloudWorld2;  // see below if you store that as a member
-    }
+    
+    if (count == 100){
+      std::cout << "Saving final map at PCD count : "<< count << std::endl;
+      saveFinalMap();
+      pcd_save_en_ = false;
+    } 
   }
 }
 
